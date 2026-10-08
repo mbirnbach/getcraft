@@ -1,8 +1,9 @@
 # Signing releases
 
 Releases are built by [`release.yml`](../.github/workflows/release.yml) when a `v*` tag is
-pushed. Signing switches on by itself once the secrets below exist; until both platforms are
-signed, a release is published as a pre-release, which GetCraft's self-updater ignores.
+pushed. Signing switches on by itself once the secrets below exist. A release becomes a normal release
+as soon as macOS is signed and notarized; without that it's a pre-release, which GetCraft's
+self-updater ignores. Windows builds are released unsigned until SignPath is set up.
 
 Run the workflow by hand (*Actions → Release → Run workflow*) for a dry run: it builds, signs and
 packages everything but publishes nothing.
@@ -69,6 +70,6 @@ in SignPath; you get an email when it's waiting.
    commit.
 2. Tag and push: `git tag -a v0.2.0 -m "GetCraft 0.2.0" && git push origin v0.2.0`. The workflow
    refuses tags that don't match `Cargo.toml`.
-3. Approve the Windows signing request in SignPath when the email arrives.
+3. Once SignPath is set up: approve the Windows signing request when the email arrives.
 4. The release appears on GitHub. Once it's a normal (not pre-) release, the index picks it up
    within 30 minutes and installed copies of GetCraft update themselves.

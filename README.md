@@ -104,9 +104,10 @@ Get the latest version from the [releases page](https://github.com/mbirnbach/get
 | Linux x86_64 / ARM64 | `getcraft-<version>-linux-<arch>.AppImage` |
 
 > [!NOTE]
-> The current builds are early **pre-releases and not yet code-signed**, so macOS and Windows
-> will warn before opening them. Signed releases are on their way (see
-> [Code signing policy](#code-signing-policy)).
+> The macOS app is signed and notarized by Apple. The Windows build isn't code-signed yet, so
+> Windows SmartScreen may say *"Windows protected your PC"* the first time you open it: click
+> **More info → Run anyway**. GetCraft's own updates after that aren't affected. Signed Windows
+> builds are on their way (see [Code signing policy](#code-signing-policy)).
 
 Installed apps go to:
 
@@ -164,8 +165,8 @@ scripts/build-dmg.sh target/bundle/GetCraft.app GetCraft.dmg  # pack it into the
 cargo run --release -p getcraft --example make_icon   # rebuild the app icons from assets/getcraft-source.png
 ```
 
-Releases are built by pushing a `v*` tag (see [`release.yml`](.github/workflows/release.yml)).
-Until the signing secrets are configured, releases are ad-hoc signed and published as
+Releases are built by pushing a `v*` tag (see [`release.yml`](.github/workflows/release.yml) and
+[`docs/SIGNING.md`](docs/SIGNING.md)). Builds without a notarized macOS app are published as
 pre-releases, which GetCraft's self-updater ignores.
 
 Useful environment variables:

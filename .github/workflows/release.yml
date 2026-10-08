@@ -16,9 +16,10 @@
 #     SIGNPATH_API_TOKEN           secret: API token of the SignPath CI user (submitter)
 #     SIGNPATH_ORGANIZATION_ID     variable: the SignPath organization ID
 #
-# A release is published as a normal release only if both macOS and Windows were signed.
-# Otherwise it's a *pre-release*, which GetCraft's self-updater ignores, so unsigned builds never
-# reach users automatically.
+# A release is published as a normal release once macOS is signed and notarized (Gatekeeper
+# blocks unsigned apps outright). Windows may still be unsigned: SmartScreen only warns on a
+# manual first download, and GetCraft's own updates aren't affected. Without macOS signing it's a
+# *pre-release*, which GetCraft's self-updater ignores.
 name: Release
 
 on:
@@ -268,5 +269,5 @@ jobs:
         with:
           files: dist/*
           generate_release_notes: true
-          # Anything not fully signed stays a pre-release so the self-updater never offers it.
-          prerelease: ${{ needs.macos.outputs.signed != 'true' || needs.windows.outputs.signed != 'true' || contains(github.ref_name, '-') }}
+          # Without a notarized macOS build it stays a pre-release, which the self-updater ignores.
+          prerelease: ${{ needs.macos.outputs.signed != 'true' || contains(github.ref_name, '-') }}
