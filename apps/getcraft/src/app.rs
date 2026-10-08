@@ -262,7 +262,7 @@ fn top_bar(ui: &mut Ui, snap: &Snapshot, search: &mut String, actions: &mut Vec<
         .frame(Frame::NONE.fill(SIDEBAR).inner_margin(Margin::symmetric(18, 0)).stroke(Stroke::new(1.0, BORDER)))
         .show(ui, |ui| {
             ui.horizontal_centered(|ui| {
-                logo(ui, 22.0);
+                logo(ui, 28.0);
                 ui.label(RichText::new("GetCraft").size(18.0).strong().color(TEXT));
 
                 let search_w = 440.0_f32.min(ui.available_width() - 260.0).max(160.0);
@@ -899,14 +899,13 @@ impl GetCraftApp {
 // ------------------------------------------------------------------------------------------------
 // Small helpers
 
-/// The GetCraft mark: an accent diamond with a smaller inset diamond.
+/// The GetCraft app icon, drawn `size` points tall.
 fn logo(ui: &mut Ui, size: f32) {
-    let (rect, _) = ui.allocate_exact_size(vec2(size, size), Sense::hover());
-    let c = rect.center();
-    let diamond = |r: f32| vec![c - vec2(0.0, r), c + vec2(r, 0.0), c + vec2(0.0, r), c - vec2(r, 0.0)];
-    let painter = ui.painter();
-    painter.add(egui::Shape::convex_polygon(diamond(size / 2.0), ACCENT, Stroke::NONE));
-    painter.add(egui::Shape::convex_polygon(diamond(size / 5.0), theme::SIDEBAR, Stroke::NONE));
+    ui.add(
+        egui::Image::from_bytes("bytes://getcraft-logo.png", crate::icons::GETCRAFT)
+            .fit_to_exact_size(vec2(size, size))
+            .corner_radius(size * 0.2),
+    );
 }
 
 /// "A new GetCraft is ready" bar. Returns true when the user clicks restart.

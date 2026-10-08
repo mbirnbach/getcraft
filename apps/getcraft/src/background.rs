@@ -1,7 +1,6 @@
 //! Running in the background: the menu bar / tray icon, launch at login, and (on macOS) Dock
 //! integration, so GetCraft can keep checking for updates while its window is closed.
 
-use crate::logo;
 use std::sync::Arc;
 use std::sync::mpsc::Sender;
 
@@ -76,12 +75,10 @@ fn build_tray(commands: CommandSender) -> Result<tray_icon::TrayIcon, String> {
         }
     }));
 
-    let icon = tray_icon::Icon::from_rgba(logo::tray(TRAY_PX), TRAY_PX, TRAY_PX).map_err(|e| e.to_string())?;
+    let png = image::load_from_memory(crate::icons::GETCRAFT).map_err(|e| e.to_string())?;
+    let png = image::imageops::resize(&png.into_rgba8(), TRAY_PX, TRAY_PX, image::imageops::FilterType::Lanczos3);
+    let icon = tray_icon::Icon::from_rgba(png.into_raw(), TRAY_PX, TRAY_PX).map_err(|e| e.to_string())?;
     let builder = TrayIconBuilder::new().with_menu(Box::new(menu));
-    // macOS template images are tinted by the system to suit light and dark menu bars.
-    #[cfg(target_os = "macos")]
-    let builder = builder.with_icon_templated(icon);
-    #[cfg(not(target_os = "macos"))]
     let builder = builder.with_icon(icon);
     builder.with_tooltip("GetCraft").with_menu_on_left_click(!cfg!(windows)).build().map_err(|e| e.to_string())
 }

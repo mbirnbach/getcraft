@@ -3,6 +3,9 @@
 
 use getcraft_core::catalog::Tool;
 
+/// GetCraft's own icon (64px, full-bleed).
+pub const GETCRAFT: &[u8] = include_bytes!("../../../assets/getcraft-64.png");
+
 macro_rules! bundled {
     ($($id:literal),* $(,)?) => {
         fn bundled(id: &str) -> Option<&'static [u8]> {

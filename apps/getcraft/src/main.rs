@@ -5,7 +5,6 @@ mod app;
 mod background;
 mod icons;
 mod instance;
-mod logo;
 mod notify;
 mod theme;
 
