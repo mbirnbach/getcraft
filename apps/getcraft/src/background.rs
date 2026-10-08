@@ -68,13 +68,9 @@ fn build_tray(commands: CommandSender) -> Result<tray_icon::TrayIcon, String> {
     // On Windows a left click opens the window and the menu lives on the right button; macOS
     // and Linux show the menu on any click.
     TrayIconEvent::set_event_handler(Some(move |event: TrayIconEvent| {
-        let open = match event {
-            TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } => {
-                cfg!(windows)
-            }
-            TrayIconEvent::DoubleClick { .. } => true,
-            _ => false,
-        };
+        let left_click =
+            matches!(event, TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. });
+        let open = matches!(event, TrayIconEvent::DoubleClick { .. }) || (cfg!(windows) && left_click);
         if open {
             commands.send(Command::Show);
         }
