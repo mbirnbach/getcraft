@@ -101,6 +101,7 @@ jobs:
           $version = "${{ github.ref_name }}".TrimStart("v")
           New-Item -ItemType Directory -Force dist/GetCraft | Out-Null
           Copy-Item target/${{ matrix.target }}/release/getcraft.exe dist/GetCraft/GetCraft.exe
+          Copy-Item LICENSE-MIT, LICENSE-APACHE, NOTICE, ATTRIBUTION.md, assets/LICENSE-icon.txt dist/GetCraft/
           Compress-Archive -Path dist/GetCraft -DestinationPath "dist/getcraft-$version-windows-${{ matrix.arch }}-portable.zip"
       - uses: actions/upload-artifact@v4
         with:
@@ -125,8 +126,9 @@ jobs:
       - name: Build the AppImage
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
-          mkdir -p AppDir/usr/bin dist
+          mkdir -p AppDir/usr/bin AppDir/usr/share/doc/getcraft dist
           cp target/release/getcraft AppDir/usr/bin/getcraft
+          cp LICENSE-MIT LICENSE-APACHE NOTICE ATTRIBUTION.md assets/LICENSE-icon.txt AppDir/usr/share/doc/getcraft/
           cp assets/getcraft-256.png AppDir/getcraft.png
           ln -s usr/bin/getcraft AppDir/AppRun
           printf '%s\n' '[Desktop Entry]' 'Type=Application' 'Name=GetCraft' \

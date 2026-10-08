@@ -1,0 +1,33 @@
+GetCraft
+Copyright (c) 2026 the GetCraft contributors.
+Licensed under the MIT License or the Apache License, Version 2.0, at your option
+(LICENSE-MIT, LICENSE-APACHE).
+
+GetCraft is an independent project. It is not affiliated with, sponsored by or endorsed by the
+ArtCraft Team. ArtCraft is a trademark of the ArtCraft Team.
+
+The GetCraft app icon (assets/getcraft-source.png and the files generated from it:
+assets/getcraft-1024.png, getcraft-256.png, getcraft-64.png, getcraft.icns, getcraft.ico) is not
+covered by the license above; its terms are in assets/LICENSE-icon.txt.
+
+Third-party material
+
+This product bundles third-party material under its own licenses. The per-file list (author,
+source, license) is in ATTRIBUTION.md.
+
+Crafting App icons (assets/icons/*.png), used under the MIT License (see LICENSE-MIT):
+  Copyright (c) 2026 ArtCraft Team and the PhotoCraft contributors
+  Copyright (c) 2026 ArtCraft Team and the VectorCraft contributors
+  Copyright (c) 2026 ArtCraft Team and the FilmCraft contributors
+  Copyright (c) 2026 ArtCraft Team and the LightCraft contributors
+  Copyright (c) 2026 ArtCraft Team and the PdfCraft contributors
+  Copyright (c) 2026 ArtCraft Team and the EffectCraft contributors
+  Copyright (c) 2026 ArtCraft Team and the DesignCraft contributors
+  Copyright (c) 2026 ArtCraft Team and the WordCraft contributors
+  Copyright (c) 2026 ArtCraft Team and the GridCraft contributors
+  Copyright (c) 2026 ArtCraft Team and the DeckCraft contributors
+  Copyright (c) 2026 ArtCraft Team and the SoundCraft contributors
+  Copyright (c) 2026 ArtCraft Team and the CADCraft contributors
+
+Compiled builds also contain Rust crates from crates.io under their own permissive licenses
+(MIT, Apache-2.0, BSD, ISC, Zlib, Unicode and similar), as recorded in Cargo.lock.

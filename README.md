@@ -1,72 +1,172 @@
-# GetCraft
+<p align="center">
+  <img alt="GetCraft app icon: an engraved octopus on turquoise" src="assets/getcraft-256.png" width="128">
+</p>
 
-**One place to install and update the open-source Crafting Apps** (PhotoCraft, VectorCraft,
-FilmCraft, LightCraft, PdfCraft and friends). No GitHub, no hunting for the right download, no
-manual updates.
+<h1 align="center">GetCraft</h1>
 
-> GetCraft is an independent, community-made project. It is **not affiliated with or endorsed by
-> the ArtCraft team**. All apps are downloaded straight from their official GitHub releases.
+<p align="center">
+  <b>One place to install and update the open-source Crafting Apps.</b><br>
+  PhotoCraft, VectorCraft, FilmCraft, LightCraft and the rest, in one click, kept up to date,<br>
+  without GitHub accounts, release pages or manual downloads.
+</p>
 
-## What it does
+<p align="center">
+  <img alt="100% Rust" src="https://img.shields.io/badge/100%25-Rust-b7410e?style=flat-square&logo=rust">
+  <img alt="macOS · Windows · Linux" src="https://img.shields.io/badge/macOS%20%C2%B7%20Windows%20%C2%B7%20Linux-native-2f7bf5?style=flat-square">
+  <img alt="License: MIT OR Apache-2.0" src="https://img.shields.io/badge/license-MIT%20%2F%20Apache--2.0-3a3a3a?style=flat-square">
+  <img alt="Status: early" src="https://img.shields.io/badge/status-early-d69e2e?style=flat-square">
+  <a href="https://github.com/mbirnbach/getcraft/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/mbirnbach/getcraft/ci.yml?branch=main&style=flat-square&label=CI"></a>
+</p>
 
-- Lists every Crafting App with its icon, description and latest version.
-- Installs the right build for your computer (macOS universal, Windows x64/ARM64/x86, Linux
-  x86_64/ARM64) with one click, without needing admin rights, and checks each download against
-  the project's published SHA-256 checksums.
-- Finds apps you already installed by hand and keeps them up to date too.
-- Checks for updates regularly and, per app, either **notifies you** or **updates automatically**.
-  Apps are never replaced while they're open.
-- Picks up new `*craft` apps from the `storytold` GitHub organisation automatically.
-- Keeps running in the menu bar / system tray when its window is closed, starts at login (hidden),
-  and updates itself.
+> [!IMPORTANT]
+> **GetCraft is an independent, community-made project.** It is not made, sponsored or endorsed
+> by the ArtCraft team. The Crafting Apps it installs are made by the
+> [ArtCraft](https://getartcraft.com/) team and community, and GetCraft downloads them unchanged
+> from their official GitHub releases. Problems with an app itself belong in that app's
+> repository; problems with installing or updating belong [here](https://github.com/mbirnbach/getcraft/issues).
+
+<p align="center">
+  <a href="#features">Features</a> ·
+  <a href="#supported-apps">Supported apps</a> ·
+  <a href="#download">Download</a> ·
+  <a href="#how-it-works">How it works</a> ·
+  <a href="#development">Development</a> ·
+  <a href="#license-and-credits">License and credits</a>
+</p>
+
+<br>
+
+<p align="center">
+  <img src="docs/images/getcraft-apps.png" alt="GetCraft's app catalog: category tabs, a card per Crafting App with Install, Open and Update buttons, and an Installed panel listing PhotoCraft and VectorCraft with updates available" width="100%">
+  <br>
+  <sub>The catalog. Apps you already have, even ones installed by hand, show up under Installed.</sub>
+</p>
+
+## Features
+
+- **One-click installs.** GetCraft picks the right build for your computer (macOS universal,
+  Windows x64/ARM64/x86, Linux x86_64/ARM64) and installs it without asking for admin rights.
+- **Verified downloads.** Every download comes straight from the app's official GitHub release
+  and is checked against the SHA-256 checksums the project publishes.
+- **Updates your way, per app.** Get notified about new versions, have them installed
+  automatically, or ignore an app. Apps are never replaced while they're open.
+- **Finds what you already have.** Apps you installed by hand are recognised and kept up to date
+  too.
+- **Quietly in the background.** Closing the window leaves GetCraft in the menu bar or system
+  tray, where it keeps checking. It can start at login, and it updates itself.
+- **New apps appear automatically.** When the ArtCraft team publishes a new Crafting App,
+  GetCraft lists it under *New on GitHub* without needing an update.
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/images/getcraft-updates.png" alt="The Updates page listing PhotoCraft and VectorCraft with Update buttons"></td>
+    <td width="50%"><img src="docs/images/getcraft-app-menu.png" alt="An app's menu with What's new, View on GitHub, Show in Finder, the per-app update setting and Uninstall"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Pending updates in one place.</sub></td>
+    <td align="center"><sub>Release notes, the per-app update setting and uninstall.</sub></td>
+  </tr>
+</table>
+
+## Supported apps
+
+GetCraft knows these Crafting Apps today and picks up new ones on its own.
+
+| | App | What it is | Project |
+|---|---|---|---|
+| <img src="assets/icons/photocraft.png" alt="" width="32" height="32"> | **PhotoCraft** | Image editor | [GitHub](https://github.com/storytold/photocraft) · [Website](https://getartcraft.com/apps/photocraft) |
+| <img src="assets/icons/vectorcraft.png" alt="" width="32" height="32"> | **VectorCraft** | Vector illustration | [GitHub](https://github.com/storytold/vectorcraft) · [Website](https://getartcraft.com/apps/vectorcraft) |
+| <img src="assets/icons/filmcraft.png" alt="" width="32" height="32"> | **FilmCraft** | Video editor | [GitHub](https://github.com/storytold/filmcraft) · [Website](https://getartcraft.com/apps/filmcraft) |
+| <img src="assets/icons/lightcraft.png" alt="" width="32" height="32"> | **LightCraft** | Photo library and raw developer | [GitHub](https://github.com/storytold/lightcraft) · [Website](https://getartcraft.com/apps/lightcraft) |
+| <img src="assets/icons/pdfcraft.png" alt="" width="32" height="32"> | **PdfCraft** | PDF workbench | [GitHub](https://github.com/storytold/pdfcraft) · [Website](https://getartcraft.com/apps/pdfcraft) |
+| <img src="assets/icons/effectcraft.png" alt="" width="32" height="32"> | **EffectCraft** | Motion graphics and VFX | [GitHub](https://github.com/storytold/effectcraft) · [Website](https://getartcraft.com/apps/effectcraft) |
+| <img src="assets/icons/designcraft.png" alt="" width="32" height="32"> | **DesignCraft** | Page layout and publishing | [GitHub](https://github.com/storytold/designcraft) · [Website](https://getartcraft.com/apps/designcraft) |
+| <img src="assets/icons/wordcraft.png" alt="" width="32" height="32"> | **WordCraft** | Word processor | [GitHub](https://github.com/storytold/wordcraft) |
+| <img src="assets/icons/gridcraft.png" alt="" width="32" height="32"> | **GridCraft** | Spreadsheets | [GitHub](https://github.com/storytold/gridcraft) |
+| <img src="assets/icons/deckcraft.png" alt="" width="32" height="32"> | **DeckCraft** | Presentations | [GitHub](https://github.com/storytold/deckcraft) |
+| <img src="assets/icons/soundcraft.png" alt="" width="32" height="32"> | **SoundCraft** | Audio workstation | [GitHub](https://github.com/storytold/soundcraft) |
+| <img src="assets/icons/cadcraft.png" alt="" width="32" height="32"> | **CADCraft** | CAD and drafting | [GitHub](https://github.com/storytold/cadcraft) |
+
+The apps are free and open source, made by the ArtCraft team and community. Learn more about
+them, and about ArtCraft itself, at [getartcraft.com/apps](https://getartcraft.com/apps).
+
+## Download
+
+Get the latest version from the [releases page](https://github.com/mbirnbach/getcraft/releases):
+
+| System | File |
+|---|---|
+| macOS 11+ (Apple silicon and Intel) | `getcraft-<version>-macos-universal.dmg` |
+| Windows 10/11 x64 | `getcraft-<version>-windows-x64-portable.zip` |
+| Windows 11 on ARM | `getcraft-<version>-windows-arm64-portable.zip` |
+| Linux x86_64 / ARM64 | `getcraft-<version>-linux-<arch>.AppImage` |
+
+> [!NOTE]
+> The current builds are early **pre-releases and not yet code-signed**, so macOS and Windows
+> will warn before opening them. Signed releases are next on the list.
+
+Installed apps go to:
+
+| System | Location | Shows up in |
+|---|---|---|
+| macOS | `/Applications` (or `~/Applications` without admin rights) | Launchpad and Spotlight |
+| Windows | `%LOCALAPPDATA%\Programs\GetCraft\<app>` (portable build) | Start menu |
+| Linux | `~/.local/share/getcraft/apps/<app>` (AppImage) | Application menu |
 
 ## How it works
 
 ```
-apps/getcraft          the desktop app (Rust + egui, like the Crafting Apps themselves)
+apps/getcraft          the desktop app (Rust and egui, like the Crafting Apps themselves)
 apps/getcraft-index    builds index.json, run by CI every 30 minutes
 crates/getcraft-core   catalog, GitHub client, asset matching, installers, update engine
-catalog.toml           curated tool list: names, descriptions, categories
+catalog.toml           the curated list of apps: names, descriptions, categories
 ```
 
-The GitHub API allows only 60 unauthenticated requests per hour per IP. So instead of every
-launcher querying every repository, the `Release index` workflow builds one `index.json` and
-publishes it to the `index` branch. Launchers fetch that single file and query GitHub directly
-only if it's unavailable or stale.
+GitHub allows only 60 unauthenticated API requests per hour per IP address. Instead of every
+copy of GetCraft querying every repository, the *Release index* workflow collects the latest
+release of every app (and of GetCraft) into one `index.json` on the `index` branch. GetCraft
+downloads that single file and only asks GitHub directly if it's unavailable.
 
-To add or describe a tool, edit `catalog.toml`. The change reaches every launcher through the
-index; no new GetCraft release is needed.
-
-Installed apps go to:
-
-| OS      | Location                                                      | Menu entry          |
-|---------|---------------------------------------------------------------|---------------------|
-| macOS   | `/Applications` (or `~/Applications` without admin rights)    | Launchpad/Spotlight |
-| Windows | `%LOCALAPPDATA%\Programs\GetCraft\<app>` (portable build)     | Start Menu          |
-| Linux   | `~/.local/share/getcraft/apps/<app>` (AppImage)               | `.desktop` entry    |
+To add an app or change how one is described, edit [`catalog.toml`](catalog.toml). The change
+reaches everyone through the index; no GetCraft release is needed.
 
 ## Development
 
 ```bash
-cargo run -p getcraft                                 # the app
+cargo run -p getcraft                                 # run the app
 cargo test --workspace                                # unit tests
-cargo run -p getcraft-core --example smoke pdfcraft   # live end-to-end install into a temp dir
+cargo run -p getcraft-core --example smoke pdfcraft   # live end-to-end install into a temp folder
 scripts/bundle-macos.sh debug                         # build target/bundle/GetCraft.app
 cargo run --release -p getcraft --example make_icon   # rebuild the app icons from assets/getcraft-source.png
 ```
 
-Releases are built by pushing a `v*` tag (see `.github/workflows/release.yml`). Until the signing
-secrets are configured, releases are ad-hoc signed and published as pre-releases, which the
-self-updater ignores.
+Releases are built by pushing a `v*` tag (see [`release.yml`](.github/workflows/release.yml)).
+Until the signing secrets are configured, releases are ad-hoc signed and published as
+pre-releases, which GetCraft's self-updater ignores.
 
 Useful environment variables:
 
-- `GETCRAFT_INDEX_URL` points at a different `index.json` (e.g. a local one).
-- `GETCRAFT_GITHUB_TOKEN` is used for direct API calls, which lifts the rate limit while developing.
+- `GETCRAFT_INDEX_URL` points at a different `index.json`, e.g. a local one.
+- `GETCRAFT_GITHUB_TOKEN` is used for direct API calls and lifts the rate limit while developing.
 - `GETCRAFT_TREAT_AS_INSTALLED=1` lets a development build register the login item.
 - `RUST_LOG=debug` turns on verbose logging.
 
-## License
+## License and credits
 
-Dual-licensed under [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE), like the Crafting Apps.
-App names and icons belong to their respective owners and are used only to identify the apps.
+GetCraft's code is dual-licensed under [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE), at
+your option. Copyright (c) 2026 the GetCraft contributors. Required notices are in
+[NOTICE](NOTICE).
+
+The GetCraft app icon (the engraved octopus in `assets/getcraft*`) is **not** covered by that
+license. It may be used only as part of GetCraft and this repository; forks and modified versions
+must replace it. See [`assets/LICENSE-icon.txt`](assets/LICENSE-icon.txt).
+
+The Crafting Apps' icons in [`assets/icons/`](assets/icons/) are copies of the icons in each
+app's repository, used under those projects' MIT license, with their copyright notices in
+[ATTRIBUTION.md](ATTRIBUTION.md). Every other non-code asset is listed there too.
+
+<sub>ArtCraft is a trademark of the ArtCraft Team. PhotoCraft, VectorCraft, FilmCraft,
+LightCraft, PdfCraft, EffectCraft, DesignCraft, WordCraft, GridCraft, DeckCraft, SoundCraft and
+CADCraft are projects of the ArtCraft Team and their contributors. These names are used only to
+identify the apps GetCraft installs. GetCraft does not use the ArtCraft wordmark or logo, and it
+is not affiliated with, sponsored by or endorsed by the ArtCraft Team.</sub>

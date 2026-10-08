@@ -592,9 +592,28 @@ impl GetCraftApp {
                     .color(MUTED),
                 );
                 ui.horizontal(|ui| {
-                    ui.hyperlink_to("ArtCraft Crafting Apps", "https://getartcraft.com/apps");
+                    ui.hyperlink_to("The Crafting Apps", "https://getartcraft.com/apps");
                     ui.hyperlink_to("Source code", "https://github.com/mbirnbach/getcraft");
+                    ui.hyperlink_to("Licenses", "https://github.com/mbirnbach/getcraft/blob/main/NOTICE");
                 });
+            });
+
+            section(ui, "Credits", |ui| {
+                ui.label(
+                    RichText::new(
+                        "GetCraft is free software under the MIT or Apache-2.0 license. Its app icon is \
+                         original artwork for GetCraft and not covered by that license.",
+                    )
+                    .color(MUTED),
+                );
+                ui.label(
+                    RichText::new(
+                        "The app icons shown here are copyright (c) 2026 ArtCraft Team and the contributors of \
+                         each app, used under the MIT License. ArtCraft is a trademark of the ArtCraft Team.",
+                    )
+                    .color(MUTED),
+                );
+                ui.hyperlink_to("Full attribution", "https://github.com/mbirnbach/getcraft/blob/main/ATTRIBUTION.md");
             });
         });
     }

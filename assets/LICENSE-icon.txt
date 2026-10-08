@@ -1,0 +1,23 @@
+GetCraft app icon: license
+
+The GetCraft app icon, the engraved octopus on turquoise (assets/getcraft-source.png and every
+file generated from it: getcraft-1024.png, getcraft-256.png, getcraft-64.png, getcraft.icns and
+getcraft.ico), is original artwork owned by the GetCraft project owner. All rights reserved.
+
+It is NOT covered by GetCraft's MIT OR Apache-2.0 license, and nothing in that license, in NOTICE
+or in any other file of this repository grants any right to it, except the permission below.
+
+Permission
+
+You may copy and display the icon, unmodified, only:
+
+  1. as part of copies of this repository; and
+  2. within GetCraft itself, its documentation and its official builds, to identify GetCraft.
+
+Forks and modified versions
+
+If you distribute a modified version of GetCraft, or any work derived from it, replace the icon
+with your own. A fork kept only to propose changes back to this repository may keep it.
+
+Any other use needs prior written permission from the project owner
+(https://github.com/mbirnbach/getcraft).

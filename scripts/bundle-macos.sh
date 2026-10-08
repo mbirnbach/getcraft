@@ -25,6 +25,8 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/GetCraft"
 if [[ -f assets/getcraft.icns ]]; then cp assets/getcraft.icns "$APP/Contents/Resources/GetCraft.icns"; fi
+# License texts and notices travel with every copy (required for the bundled app icons).
+cp LICENSE-MIT LICENSE-APACHE NOTICE ATTRIBUTION.md assets/LICENSE-icon.txt "$APP/Contents/Resources/"
 
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>

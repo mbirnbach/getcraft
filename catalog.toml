@@ -127,7 +127,7 @@ description = "Record, edit and mix audio in an open-source digital audio workst
 
 [[tool]]
 id = "cadcraft"
-name = "CadCraft"
+name = "CADCraft"
 repo = "storytold/cadcraft"
 category = "cad"
 kind = "CAD & drafting"
