@@ -6,9 +6,9 @@ Licensed under the MIT License or the Apache License, Version 2.0, at your optio
 GetCraft is an independent project. It is not affiliated with, sponsored by or endorsed by the
 ArtCraft Team. ArtCraft is a trademark of the ArtCraft Team.
 
-The GetCraft app icon (assets/getcraft-source.png and the files generated from it:
-assets/getcraft-1024.png, getcraft-256.png, getcraft-64.png, getcraft.icns, getcraft.ico) is not
-covered by the license above; its terms are in assets/LICENSE-icon.txt.
+The GetCraft artwork (the app icon in assets/getcraft-source.png and the files generated from
+it, and the DMG background in assets/dmg/) is not covered by the license above; its terms are in
+assets/LICENSE-icon.txt.
 
 Third-party material
 

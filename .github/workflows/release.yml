@@ -110,9 +110,8 @@ jobs:
 
       - name: Build the DMG
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          mkdir -p target/dmg && cp -R target/bundle/GetCraft.app target/dmg/ && ln -s /Applications target/dmg/Applications
-          hdiutil create -volname GetCraft -srcfolder target/dmg -ov -format UDZO "target/getcraft-$VERSION-macos-universal.dmg"
+          pip3 install --break-system-packages --quiet dmgbuild==1.6.7
+          scripts/build-dmg.sh target/bundle/GetCraft.app "target/getcraft-${GITHUB_REF_NAME#v}-macos-universal.dmg"
 
       - name: Sign, notarize and staple the DMG
         if: env.HAS_SIGNING == 'true'

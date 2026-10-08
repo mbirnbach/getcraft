@@ -10,6 +10,7 @@ and [`NOTICE`](NOTICE)). When you add an asset, add a row here in the same chang
 |---|---|---|---|---|
 | `assets/getcraft-source.png` | GetCraft app icon artwork (engraved octopus on turquoise) | The GetCraft project owner | Original work | All rights reserved; may be used only as part of GetCraft, see [`assets/LICENSE-icon.txt`](assets/LICENSE-icon.txt) |
 | `assets/getcraft-1024.png`, `getcraft-256.png`, `getcraft-64.png`, `getcraft.icns`, `getcraft.ico` | GetCraft app icon in the sizes and formats the packages need | The GetCraft project owner | Generated from `assets/getcraft-source.png` by `apps/getcraft/examples/make_icon.rs` | As above, [`assets/LICENSE-icon.txt`](assets/LICENSE-icon.txt) |
+| `assets/dmg/background.png`, `assets/dmg/background@2x.png` | macOS DMG background (octopus in waves, "Drag into Applications to install") | The GetCraft project owner | Original work | As above, [`assets/LICENSE-icon.txt`](assets/LICENSE-icon.txt) |
 | `docs/images/getcraft-*.png` | GetCraft screenshots | GetCraft contributors (UI) | Captured from GetCraft on macOS | MIT OR Apache-2.0 for the GetCraft UI; the Crafting App icons shown are listed below |
 | `catalog.toml` (`kind` and `description` fields) | Short app descriptions | GetCraft contributors; the descriptions of PhotoCraft, VectorCraft, FilmCraft, LightCraft and EffectCraft quote or closely follow the taglines on [getartcraft.com/apps](https://getartcraft.com/apps) | Original text and short quotations used to describe each app | MIT OR Apache-2.0 for the original text |
 

@@ -160,6 +160,7 @@ cargo run -p getcraft                                 # run the app
 cargo test --workspace                                # unit tests
 cargo run -p getcraft-core --example smoke pdfcraft   # live end-to-end install into a temp folder
 scripts/bundle-macos.sh debug                         # build target/bundle/GetCraft.app
+scripts/build-dmg.sh target/bundle/GetCraft.app GetCraft.dmg  # pack it into the styled DMG (pip install dmgbuild)
 cargo run --release -p getcraft --example make_icon   # rebuild the app icons from assets/getcraft-source.png
 ```
 
@@ -205,9 +206,9 @@ GetCraft's code is dual-licensed under [MIT](LICENSE-MIT) or [Apache-2.0](LICENS
 your option. Copyright (c) 2026 the GetCraft contributors. Required notices are in
 [NOTICE](NOTICE).
 
-The GetCraft app icon (the engraved octopus in `assets/getcraft*`) is **not** covered by that
-license. It may be used only as part of GetCraft and this repository; forks and modified versions
-must replace it. See [`assets/LICENSE-icon.txt`](assets/LICENSE-icon.txt).
+The GetCraft artwork (the engraved octopus app icon in `assets/getcraft*` and the DMG background
+in `assets/dmg/`) is **not** covered by that license. It may be used only as part of GetCraft and
+this repository; forks and modified versions must replace it. See [`assets/LICENSE-icon.txt`](assets/LICENSE-icon.txt).
 
 The Crafting Apps' icons in [`assets/icons/`](assets/icons/) are copies of the icons in each
 app's repository, used under those projects' MIT license, with their copyright notices in
