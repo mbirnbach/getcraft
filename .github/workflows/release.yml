@@ -35,7 +35,24 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  # The tag must match Cargo.toml: the version is baked into the binaries, and SignPath checks the
+  # Windows exe's version against the tag.
+  check-version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tag matches Cargo.toml
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          CARGO=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+          TAG="${GITHUB_REF_NAME#v}"
+          if [ "$CARGO" != "$TAG" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME doesn't match version $CARGO in Cargo.toml. Bump Cargo.toml first."
+            exit 1
+          fi
+
   macos:
+    needs: check-version
     runs-on: macos-latest
     outputs:
       signed: ${{ steps.mode.outputs.signed }}
@@ -122,6 +139,7 @@ jobs:
           path: target/getcraft-*.dmg
 
   windows:
+    needs: check-version
     runs-on: windows-latest
     outputs:
       signed: ${{ steps.mode.outputs.signed }}
@@ -202,6 +220,7 @@ jobs:
           path: out/*.zip
 
   linux:
+    needs: check-version
     strategy:
       matrix:
         include:
