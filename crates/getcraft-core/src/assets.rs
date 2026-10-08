@@ -171,6 +171,24 @@ mod tests {
         assert_eq!(pick(&list, Os::Linux, Arch::Arm64), Some("photocraft-0.5.0-linux-aarch64.AppImage"));
     }
 
+    /// GetCraft's own release assets, which the self-updater has to find.
+    #[test]
+    fn picks_getcraft_release_assets() {
+        let list = assets(&[
+            "getcraft-0.1.0-linux-aarch64.AppImage",
+            "getcraft-0.1.0-linux-x86_64.AppImage",
+            "getcraft-0.1.0-macos-universal.dmg",
+            "getcraft-0.1.0-windows-arm64-portable.zip",
+            "getcraft-0.1.0-windows-x64-portable.zip",
+            "SHA256SUMS.txt",
+        ]);
+        assert_eq!(pick(&list, Os::MacOs, Arch::Arm64), Some("getcraft-0.1.0-macos-universal.dmg"));
+        assert_eq!(pick(&list, Os::Windows, Arch::X64), Some("getcraft-0.1.0-windows-x64-portable.zip"));
+        assert_eq!(pick(&list, Os::Windows, Arch::Arm64), Some("getcraft-0.1.0-windows-arm64-portable.zip"));
+        assert_eq!(pick(&list, Os::Linux, Arch::X64), Some("getcraft-0.1.0-linux-x86_64.AppImage"));
+        assert_eq!(pick(&list, Os::Linux, Arch::Arm64), Some("getcraft-0.1.0-linux-aarch64.AppImage"));
+    }
+
     #[test]
     fn falls_back_to_emulated_arch() {
         let list = assets(&["tool-1.0.0-windows-x64-portable.zip", "tool-1.0.0-linux-x86_64.AppImage"]);
