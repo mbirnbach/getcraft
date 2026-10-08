@@ -30,13 +30,10 @@ fn main() -> eframe::Result {
 
     notify::init();
 
-    let icon =
-        image::load_from_memory(include_bytes!("../../../assets/getcraft-256.png")).expect("bundled icon").into_rgba8();
-    let icon = egui::IconData { width: icon.width(), height: icon.height(), rgba: icon.into_raw() };
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_title("GetCraft")
-            .with_icon(icon)
+            .with_icon(window_icon())
             .with_visible(!hidden)
             .with_inner_size([1280.0, 820.0])
             .with_min_inner_size([900.0, 560.0]),
@@ -47,4 +44,24 @@ fn main() -> eframe::Result {
         options,
         Box::new(move |cc| Ok(Box::new(app::GetCraftApp::new(cc, paths, listener, hidden)))),
     )
+}
+
+/// The icon eframe applies to the window and, on macOS, to the Dock.
+fn window_icon() -> egui::IconData {
+    // Inside GetCraft.app, leave the Dock to the bundle's .icns, which macOS draws at the same
+    // size as every other app. An empty IconData tells eframe not to replace it at runtime.
+    if cfg!(target_os = "macos")
+        && std::env::current_exe().is_ok_and(|exe| exe.to_string_lossy().contains(".app/Contents/MacOS/"))
+    {
+        return egui::IconData::default();
+    }
+    // Unbundled runs have no .icns. On macOS the image becomes the Dock icon, so it needs Apple's
+    // margins; elsewhere it's a small full-bleed title bar / taskbar icon.
+    let png: &[u8] = if cfg!(target_os = "macos") {
+        include_bytes!("../../../assets/getcraft-macos-256.png")
+    } else {
+        include_bytes!("../../../assets/getcraft-256.png")
+    };
+    let png = image::load_from_memory(png).expect("bundled icon").into_rgba8();
+    egui::IconData { width: png.width(), height: png.height(), rgba: png.into_raw() }
 }
