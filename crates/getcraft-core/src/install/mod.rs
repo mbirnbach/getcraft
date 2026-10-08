@@ -18,9 +18,13 @@ use std::path::{Path, PathBuf};
 pub struct Installer {
     /// Where tools are installed.
     pub apps_dir: PathBuf,
+    // Only the macOS installer needs scratch space (for mounting disk images) and scans
+    // system-wide folders for hand-installed apps.
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
     work_dir: PathBuf,
     /// Whether to look for hand-installed copies outside `apps_dir` (e.g. `/Applications`).
     /// Off for custom/test directories so they never see, or touch, the real system.
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
     scan_system_dirs: bool,
 }
 
