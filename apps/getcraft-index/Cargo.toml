@@ -1,0 +1,11 @@
+[package]
+name = "getcraft-index"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+[dependencies]
+getcraft-core = { version = "0.1.0", path = "../../crates/getcraft-core" }
+serde_json = "1.0.151"

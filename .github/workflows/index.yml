@@ -1,0 +1,40 @@
+# Publishes index.json (every tool + its latest release) to the `index` branch, so launchers make
+# one CDN request instead of ~14 rate-limited GitHub API calls per update check.
+name: Release index
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: [catalog.toml, crates/getcraft-core/src/**, apps/getcraft-index/**]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: index
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build index
+        env:
+          GETCRAFT_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: cargo run --release -p getcraft-index -- catalog.toml > "$RUNNER_TEMP/index.json"
+      - name: Publish to the index branch
+        run: |
+          cd "$RUNNER_TEMP"
+          mkdir publish && mv index.json publish/ && cp "$GITHUB_WORKSPACE/catalog.toml" publish/
+          cd publish
+          git init -q -b index
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add . && git commit -q -m "Update release index"
+          git push -q --force "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" index

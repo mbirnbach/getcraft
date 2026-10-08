@@ -1,0 +1,123 @@
+# Builds GetCraft for every platform when a `v*` tag is pushed. Assets follow the Crafting Apps
+# naming scheme (getcraft-<version>-<os>-<arch>.<ext>) so GetCraft can later update itself with the
+# same asset matcher it uses for the apps.
+#
+# macOS signing needs these repository secrets:
+#   APPLE_CERTIFICATE_P12      base64 of the "Developer ID Application" certificate (.p12)
+#   APPLE_CERTIFICATE_PASSWORD password of that .p12
+#   APPLE_SIGNING_IDENTITY     e.g. "Developer ID Application: Your Name (TEAMID)"
+#   APPLE_ID / APPLE_TEAM_ID / APPLE_APP_PASSWORD   for notarization (app-specific password)
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin, x86_64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+      - run: scripts/bundle-macos.sh release
+      - name: Sign
+        env:
+          P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
+          P12_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        run: |
+          KEYCHAIN="$RUNNER_TEMP/build.keychain"
+          echo "$P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p ci "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p ci "$KEYCHAIN"
+          security import "$RUNNER_TEMP/cert.p12" -k "$KEYCHAIN" -P "$P12_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k ci "$KEYCHAIN"
+          security list-keychains -d user -s "$KEYCHAIN"
+          codesign --force --options runtime --timestamp --sign "$IDENTITY" target/bundle/GetCraft.app
+      - name: Build, notarize and staple the DMG
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          DMG="target/getcraft-$VERSION-macos-universal.dmg"
+          mkdir -p target/dmg && cp -R target/bundle/GetCraft.app target/dmg/ && ln -s /Applications target/dmg/Applications
+          hdiutil create -volname GetCraft -srcfolder target/dmg -ov -format UDZO "$DMG"
+          codesign --timestamp --sign "$IDENTITY" "$DMG"
+          xcrun notarytool submit "$DMG" --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD" --wait
+          xcrun stapler staple "$DMG"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          path: target/getcraft-*.dmg
+
+  windows:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-pc-windows-msvc
+            arch: x64
+          - target: aarch64-pc-windows-msvc
+            arch: arm64
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --release -p getcraft --target ${{ matrix.target }}
+      # TODO: sign once a certificate is available (e.g. SignPath's free OSS program).
+      - shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}".TrimStart("v")
+          New-Item -ItemType Directory -Force dist/GetCraft | Out-Null
+          Copy-Item target/${{ matrix.target }}/release/getcraft.exe dist/GetCraft/GetCraft.exe
+          Compress-Archive -Path dist/GetCraft -DestinationPath "dist/getcraft-$version-windows-${{ matrix.arch }}-portable.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-${{ matrix.arch }}
+          path: dist/*.zip
+
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: sudo apt-get update && sudo apt-get install -y libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev
+      - run: cargo build --release -p getcraft
+      # TODO: AppImage packaging.
+      - run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          mkdir -p dist && tar -C target/release -czf "dist/getcraft-$VERSION-linux-x86_64.tar.gz" getcraft
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: dist/*.tar.gz
+
+  publish:
+    needs: [macos, windows, linux]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - run: cd dist && sha256sum * > SHA256SUMS.txt
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
