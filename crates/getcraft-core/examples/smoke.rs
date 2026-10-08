@@ -11,7 +11,7 @@ fn main() {
     let root = std::env::temp_dir().join(format!("getcraft-smoke-{}", std::process::id()));
     let paths = Paths::in_dir(&root);
     let installer = Installer::with_apps_dir(root.join("Applications"), &paths);
-    let engine = Engine::new(paths, installer, || {}, |event| println!("event: {event:?}"));
+    let engine = Engine::new(paths, installer, None, || {}, |event| println!("event: {event:?}"));
 
     engine.refresh();
     wait(|| !engine.snapshot().checking);

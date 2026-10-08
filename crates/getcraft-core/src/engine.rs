@@ -11,6 +11,7 @@ use crate::github::{Client, Release};
 use crate::index::{self, Collected};
 use crate::install::{self, Installer};
 use crate::platform::Platform;
+use crate::selfupdate::Location;
 use crate::state::{InstallRecord, Paths, Settings, State, UpdatePolicy};
 use crate::{Error, Result, download, version};
 use std::collections::HashMap;
@@ -78,13 +79,40 @@ pub struct Snapshot {
     pub settings: Settings,
     pub platform: Option<Platform>,
     pub apps_dir: PathBuf,
+    /// A newer GetCraft, if one was released and this install can update itself.
+    pub launcher_update: Option<LauncherUpdate>,
+    /// True while any app is downloading, installing or being removed.
+    pub busy: bool,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct LauncherUpdate {
+    pub version: String,
+    pub html_url: String,
+    /// Downloaded and verified; [`Engine::apply_launcher_update`] can install it.
+    pub ready: bool,
+    pub error: Option<String>,
 }
 
 #[derive(Clone, Debug)]
 pub enum Event {
-    UpdateAvailable { tool: String, version: String },
-    Installed { tool: String, version: String, updated: bool },
-    Failed { tool: String, error: String },
+    UpdateAvailable {
+        tool: String,
+        version: String,
+    },
+    Installed {
+        tool: String,
+        version: String,
+        updated: bool,
+    },
+    Failed {
+        tool: String,
+        error: String,
+    },
+    /// A GetCraft update has been downloaded and can be applied with a restart.
+    LauncherReady {
+        version: String,
+    },
 }
 
 struct Model {
@@ -96,6 +124,9 @@ struct Model {
     last_attempt: u64,
     last_error: Option<String>,
     cancels: HashMap<String, Arc<AtomicBool>>,
+    launcher: Option<LauncherUpdate>,
+    /// The downloaded GetCraft update, once `launcher` is ready.
+    launcher_package: Option<PathBuf>,
 }
 
 impl Model {
@@ -114,6 +145,8 @@ struct Inner {
     installer: Installer,
     paths: Paths,
     platform: Option<Platform>,
+    /// Where this GetCraft is installed; `None` disables self-updates (e.g. dev builds).
+    self_location: Option<Location>,
     on_change: Callback<()>,
     on_event: Callback<Event>,
 }
@@ -131,6 +164,7 @@ impl Engine {
     pub fn new(
         paths: Paths,
         installer: Installer,
+        self_location: Option<Location>,
         on_change: impl Fn() + Send + Sync + 'static,
         on_event: impl Fn(Event) + Send + Sync + 'static,
     ) -> Self {
@@ -148,7 +182,12 @@ impl Engine {
             last_attempt: 0,
             last_error: None,
             cancels: HashMap::new(),
+            launcher: None,
+            launcher_package: None,
         };
+        if let Some(location) = &self_location {
+            location.clean_up();
+        }
         Self {
             inner: Arc::new(Inner {
                 model: Mutex::new(model),
@@ -156,6 +195,7 @@ impl Engine {
                 installer,
                 paths,
                 platform: Platform::current(),
+                self_location,
                 on_change: Box::new(move |()| on_change()),
                 on_event: Box::new(on_event),
             }),
@@ -196,6 +236,8 @@ impl Engine {
             settings: m.state.settings.clone(),
             platform: self.inner.platform,
             apps_dir: self.inner.installer.apps_dir.clone(),
+            launcher_update: m.launcher.clone(),
+            busy: m.entries.iter().any(|e| e.job.is_some()),
         }
     }
 
@@ -230,7 +272,9 @@ impl Engine {
     fn check(&self) -> Result<()> {
         let client = &self.inner.client;
         let collected = match index::fetch(client, now()) {
-            Ok(index) => Collected { categories: index.categories, tools: index.tools, error: None },
+            Ok(index) => {
+                Collected { categories: index.categories, tools: index.tools, launcher: index.launcher, error: None }
+            }
             Err(e) => {
                 log::info!("release index unavailable ({e}), asking GitHub directly");
                 let catalog = match client.fetch_text(REMOTE_URL).and_then(|t| Catalog::parse(&t)) {
@@ -244,6 +288,9 @@ impl Engine {
             }
         };
         let first_error = collected.error;
+        if let Some(release) = collected.launcher {
+            self.consider_launcher_release(self.to_latest(release));
+        }
         let mut releases: HashMap<String, Option<LatestRelease>> = HashMap::new();
         let mut tools = Vec::new();
         for t in collected.tools {
@@ -325,6 +372,81 @@ impl Engine {
             published_at: release.published_at,
             notes: release.body.unwrap_or_default(),
         }
+    }
+
+    /// Downloads a newer GetCraft in the background so it's ready to apply.
+    fn consider_launcher_release(&self, latest: LatestRelease) {
+        let Some(location) = &self.inner.self_location else { return };
+        if !version::is_newer(&latest.version, env!("CARGO_PKG_VERSION")) {
+            return;
+        }
+        let Some((asset, kind)) = latest.package.clone() else { return };
+        if kind != location.package_kind() {
+            log::warn!("GetCraft {} has no {:?} build for this install", latest.version, location.package_kind());
+            return;
+        }
+        {
+            let mut m = self.lock();
+            if m.launcher.as_ref().is_some_and(|l| l.version == latest.version && l.error.is_none()) {
+                return;
+            }
+            m.launcher = Some(LauncherUpdate {
+                version: latest.version.clone(),
+                html_url: latest.html_url.clone(),
+                ready: false,
+                error: None,
+            });
+            m.launcher_package = None;
+        }
+        self.changed();
+
+        let this = self.clone();
+        thread::spawn(move || {
+            let client = &this.inner.client;
+            let file = this.inner.paths.downloads_dir.join(&asset.name);
+            let result = (|| {
+                let expected = match &latest.checksums {
+                    Some(sums) => assets::find_checksum(&client.fetch_text(&sums.url)?, &asset.name),
+                    None => None,
+                };
+                let never = AtomicBool::new(false);
+                download::download(client.agent(), &asset.url, &file, expected.as_deref(), &never, |_, _| {})
+            })();
+            let mut m = this.lock();
+            let Some(update) = m.launcher.as_mut().filter(|l| l.version == latest.version) else { return };
+            match result {
+                Ok(()) => {
+                    update.ready = true;
+                    m.launcher_package = Some(file);
+                    drop(m);
+                    log::info!("GetCraft {} is downloaded and ready", latest.version);
+                    this.emit(Event::LauncherReady { version: latest.version.clone() });
+                }
+                Err(e) => {
+                    log::warn!("downloading GetCraft {} failed: {e}", latest.version);
+                    update.error = Some(e.to_string());
+                    drop(m);
+                }
+            }
+            this.changed();
+        });
+    }
+
+    /// Installs the downloaded GetCraft update over this installation and returns what to
+    /// launch. The caller should then call [`crate::selfupdate::relaunch`] and exit.
+    pub fn apply_launcher_update(&self) -> Result<PathBuf> {
+        let location =
+            self.inner.self_location.as_ref().ok_or_else(|| Error::Install("this copy can't update itself".into()))?;
+        let package = {
+            let m = self.lock();
+            if m.entries.iter().any(|e| e.job.is_some()) {
+                return Err(Error::Install("wait for app installs to finish first".into()));
+            }
+            m.launcher_package.clone().ok_or_else(|| Error::Install("no update downloaded".into()))?
+        };
+        let target = location.apply(&package, &self.inner.paths.work_dir)?;
+        let _ = fs::remove_file(&package);
+        Ok(target)
     }
 
     /// Installs automatic updates and announces new versions according to each tool's policy.

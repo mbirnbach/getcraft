@@ -4,6 +4,7 @@ use crate::{icons, instance, notify};
 use egui::{Align, Color32, CornerRadius, Frame, Id, Layout, Margin, RichText, Sense, Stroke, Ui, vec2};
 use getcraft_core::engine::{Engine, Event, Job, Snapshot, ToolEntry, now};
 use getcraft_core::install::Installer;
+use getcraft_core::selfupdate;
 use getcraft_core::state::{Paths, UpdatePolicy};
 use std::net::TcpListener;
 use std::sync::mpsc::{self, Receiver};
@@ -32,6 +33,7 @@ enum Action {
     Refresh,
     UpdateAll,
     OpenUrl(String),
+    RestartForUpdate,
 }
 
 struct Toast {
@@ -54,7 +56,10 @@ pub struct GetCraftApp {
     tray: Option<Tray>,
     /// Set when the user really wants to quit (tray menu), so the close isn't turned into a hide.
     quitting: bool,
+    /// Whether the window is currently hidden in the menu bar / tray.
+    hidden: bool,
     login_item_error: Option<String>,
+    ctx: egui::Context,
 }
 
 impl GetCraftApp {
@@ -70,6 +75,7 @@ impl GetCraftApp {
         let engine = Engine::new(
             paths,
             installer,
+            selfupdate::locate(),
             move || ctx.request_repaint(),
             move |event| {
                 notify::desktop(&event);
@@ -106,18 +112,33 @@ impl GetCraftApp {
             commands,
             tray,
             quitting: false,
+            hidden,
             login_item_error,
+            ctx: cc.egui_ctx.clone(),
         }
     }
 
-    fn show_window(&self, ctx: &egui::Context) {
+    /// Installs the downloaded GetCraft update and restarts into it.
+    fn restart_for_update(&mut self, ctx: &egui::Context) {
+        match self.engine.apply_launcher_update().and_then(|target| selfupdate::relaunch(&target, self.hidden)) {
+            Ok(()) => {
+                self.quitting = true;
+                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+            }
+            Err(e) => self.toast(format!("Couldn't update GetCraft: {e}"), false),
+        }
+    }
+
+    fn show_window(&mut self, ctx: &egui::Context) {
+        self.hidden = false;
         background::set_dock_visible(true);
         ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
         ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(false));
         ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
     }
 
-    fn hide_window(&self, ctx: &egui::Context) {
+    fn hide_window(&mut self, ctx: &egui::Context) {
+        self.hidden = true;
         ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
         background::set_dock_visible(false);
         let settings = self.engine.snapshot().settings;
@@ -147,6 +168,7 @@ impl GetCraftApp {
             Action::DismissError(id) => self.engine.dismiss_error(&id),
             Action::Refresh => self.engine.refresh(),
             Action::UpdateAll => self.engine.update_all(),
+            Action::RestartForUpdate => self.restart_for_update(&self.ctx.clone()),
             Action::OpenUrl(url) => {
                 if let Err(e) = open::that(&url) {
                     log::warn!("could not open {url}: {e}");
@@ -182,6 +204,10 @@ impl eframe::App for GetCraftApp {
         if let Some(tray) = &mut self.tray {
             tray.set_updates(snap.tools.iter().filter(|t| t.update_available()).count());
         }
+        // Nobody is looking, so update GetCraft right away instead of asking.
+        if self.hidden && !self.quitting && !snap.busy && snap.launcher_update.as_ref().is_some_and(|u| u.ready) {
+            self.restart_for_update(ctx);
+        }
     }
 
     fn ui(&mut self, ui: &mut Ui, _frame: &mut eframe::Frame) {
@@ -192,7 +218,7 @@ impl eframe::App for GetCraftApp {
                     self.toast(format!("{tool} {verb} version {version}"), true);
                 }
                 Event::Failed { tool, error } => self.toast(format!("{tool}: {error}"), false),
-                Event::UpdateAvailable { .. } => {}
+                Event::UpdateAvailable { .. } | Event::LauncherReady { .. } => {}
             }
         }
 
@@ -206,6 +232,11 @@ impl eframe::App for GetCraftApp {
             installed_panel(ui, &snap, &mut actions);
         }
         egui::CentralPanel::default().frame(Frame::NONE.inner_margin(Margin::symmetric(28, 20))).show(ui, |ui| {
+            if let Some(update) = snap.launcher_update.as_ref().filter(|u| u.ready)
+                && launcher_banner(ui, update, snap.busy)
+            {
+                actions.push(Action::RestartForUpdate);
+            }
             match self.page {
                 Page::Apps => self.apps_page(ui, &snap, &mut actions),
                 Page::Updates => updates_page(ui, &snap, &mut actions),
@@ -876,6 +907,32 @@ fn logo(ui: &mut Ui, size: f32) {
     let painter = ui.painter();
     painter.add(egui::Shape::convex_polygon(diamond(size / 2.0), ACCENT, Stroke::NONE));
     painter.add(egui::Shape::convex_polygon(diamond(size / 5.0), theme::SIDEBAR, Stroke::NONE));
+}
+
+/// "A new GetCraft is ready" bar. Returns true when the user clicks restart.
+fn launcher_banner(ui: &mut Ui, update: &getcraft_core::engine::LauncherUpdate, busy: bool) -> bool {
+    let mut restart = false;
+    Frame::NONE
+        .fill(theme::ACCENT_SOFT)
+        .stroke(Stroke::new(1.0, ACCENT))
+        .corner_radius(theme::RADIUS)
+        .inner_margin(Margin::symmetric(16, 10))
+        .show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.horizontal(|ui| {
+                logo(ui, 18.0);
+                ui.label(RichText::new(format!("GetCraft {} is ready to install.", update.version)).strong());
+                if ui.link("What's new").clicked() {
+                    let _ = open::that(&update.html_url);
+                }
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    let button = ui.add_enabled(!busy, theme::primary("Restart now"));
+                    restart = button.on_disabled_hover_text("Wait for app installs to finish").clicked();
+                });
+            });
+        });
+    ui.add_space(12.0);
+    restart
 }
 
 fn chip(ui: &mut Ui, text: &str, selected: bool) -> egui::Response {

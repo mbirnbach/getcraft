@@ -10,6 +10,7 @@ pub mod github;
 pub mod index;
 pub mod install;
 pub mod platform;
+pub mod selfupdate;
 pub mod state;
 pub mod version;
 

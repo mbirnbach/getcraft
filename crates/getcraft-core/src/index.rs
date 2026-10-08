@@ -26,6 +26,9 @@ pub struct Index {
     pub generated_at: u64,
     pub categories: Vec<Category>,
     pub tools: Vec<IndexedTool>,
+    /// The latest release of GetCraft itself.
+    #[serde(default)]
+    pub launcher: Option<Release>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -38,6 +41,7 @@ pub struct IndexedTool {
 pub struct Collected {
     pub categories: Vec<Category>,
     pub tools: Vec<IndexedTool>,
+    pub launcher: Option<Release>,
     /// Set when some lookups failed; `tools` then holds whatever was gathered.
     pub error: Option<Error>,
 }
@@ -80,7 +84,14 @@ pub fn collect(client: &Client, catalog: Catalog) -> Collected {
             }
         }
     }
-    Collected { categories: catalog.categories, tools: out, error }
+    let launcher = match client.latest_release(crate::selfupdate::REPO) {
+        Ok(release) => release,
+        Err(e) => {
+            error.get_or_insert(e);
+            None
+        }
+    };
+    Collected { categories: catalog.categories, tools: out, launcher, error }
 }
 
 /// The index location; `GETCRAFT_INDEX_URL` overrides it for forks and local testing.
@@ -102,6 +113,12 @@ pub fn fetch(client: &Client, now: u64) -> Result<Index> {
 
 impl Index {
     pub fn from_collected(collected: Collected, generated_at: u64) -> Self {
-        Self { format: FORMAT, generated_at, categories: collected.categories, tools: collected.tools }
+        Self {
+            format: FORMAT,
+            generated_at,
+            categories: collected.categories,
+            tools: collected.tools,
+            launcher: collected.launcher,
+        }
     }
 }

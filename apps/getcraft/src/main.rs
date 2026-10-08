@@ -17,7 +17,11 @@ fn main() -> eframe::Result {
     // `--background` is how the login item starts us: no window, just the menu bar / tray icon.
     let hidden = std::env::args().any(|a| a == "--background");
     let paths = Paths::new().expect("no home directory");
-    let listener = match instance::acquire(paths.state_file.parent().unwrap()) {
+    let data_dir = paths.state_file.parent().unwrap().to_path_buf();
+    if std::env::args().any(|a| a == "--after-update") {
+        instance::wait_for_previous(&data_dir);
+    }
+    let listener = match instance::acquire(&data_dir) {
         instance::Instance::AlreadyRunning => {
             log::info!("GetCraft is already running; asked it to show its window");
             return Ok(());

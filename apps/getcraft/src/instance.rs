@@ -69,3 +69,18 @@ pub fn serve(listener: TcpListener, on_show: impl Fn() + Send + 'static) {
         }
     });
 }
+
+/// After a self-update the old process may still be shutting down; wait (briefly) until it has
+/// stopped listening so we become the primary instance instead of handing off to it.
+pub fn wait_for_previous(dir: &Path) {
+    let Some(port) = std::fs::read_to_string(port_file(dir)).ok().and_then(|p| p.trim().parse::<u16>().ok()) else {
+        return;
+    };
+    let addr = SocketAddr::from((Ipv4Addr::LOCALHOST, port));
+    for _ in 0..50 {
+        if TcpStream::connect_timeout(&addr, Duration::from_millis(200)).is_err() {
+            return;
+        }
+        std::thread::sleep(Duration::from_millis(200));
+    }
+}
