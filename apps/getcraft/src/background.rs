@@ -83,7 +83,10 @@ fn build_tray(commands: CommandSender) -> Result<tray_icon::TrayIcon, String> {
     let icon = tray_icon::Icon::from_rgba(logo::tray(TRAY_PX), TRAY_PX, TRAY_PX).map_err(|e| e.to_string())?;
     let builder = TrayIconBuilder::new().with_menu(Box::new(menu));
     // macOS template images are tinted by the system to suit light and dark menu bars.
-    let builder = if cfg!(target_os = "macos") { builder.with_icon_templated(icon) } else { builder.with_icon(icon) };
+    #[cfg(target_os = "macos")]
+    let builder = builder.with_icon_templated(icon);
+    #[cfg(not(target_os = "macos"))]
+    let builder = builder.with_icon(icon);
     builder.with_tooltip("GetCraft").with_menu_on_left_click(!cfg!(windows)).build().map_err(|e| e.to_string())
 }
 
