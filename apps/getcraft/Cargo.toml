@@ -7,6 +7,7 @@ rust-version.workspace = true
 repository.workspace = true
 
 [dependencies]
+auto-launch = "0.6.0"
 eframe = "0.36"
 egui = "0.36"
 egui_extras = { version = "0.36", features = ["image", "http"] }
@@ -16,3 +17,12 @@ image = { version = "0.25.10", default-features = false, features = ["png"] }
 log = "0.4.34"
 notify-rust = "4.18.2"
 open = "5.4.4"
+tray-icon = "0.26.1"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6.5"
+objc2-app-kit = { version = "0.3.2", features = ["NSApplication", "NSResponder", "NSRunningApplication"] }
+objc2-foundation = "0.3.2"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+gtk = "0.18"

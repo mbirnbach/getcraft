@@ -37,11 +37,23 @@ pub struct Settings {
     /// Per-tool overrides of `default_policy`.
     pub policies: BTreeMap<String, UpdatePolicy>,
     pub check_interval_hours: u32,
+    /// Closing the window keeps GetCraft running in the menu bar / tray.
+    pub run_in_background: bool,
+    pub launch_at_login: bool,
+    /// Whether we've told the user that closing the window doesn't quit.
+    pub background_hint_shown: bool,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { default_policy: UpdatePolicy::Notify, policies: BTreeMap::new(), check_interval_hours: 6 }
+        Self {
+            default_policy: UpdatePolicy::Notify,
+            policies: BTreeMap::new(),
+            check_interval_hours: 6,
+            run_in_background: true,
+            launch_at_login: true,
+            background_hint_shown: false,
+        }
     }
 }
 

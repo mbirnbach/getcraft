@@ -1,9 +1,11 @@
+use crate::background::{self, Command, CommandSender, Tray};
 use crate::theme::{self, ACCENT, BORDER, CARD, DANGER, FAINT, MUTED, SIDEBAR, SUCCESS, TEXT};
-use crate::{icons, notify};
+use crate::{icons, instance, notify};
 use egui::{Align, Color32, CornerRadius, Frame, Id, Layout, Margin, RichText, Sense, Stroke, Ui, vec2};
 use getcraft_core::engine::{Engine, Event, Job, Snapshot, ToolEntry, now};
 use getcraft_core::install::Installer;
 use getcraft_core::state::{Paths, UpdatePolicy};
+use std::net::TcpListener;
 use std::sync::mpsc::{self, Receiver};
 use std::time::{Duration, Instant};
 
@@ -48,14 +50,18 @@ pub struct GetCraftApp {
     notes_for: Option<String>,
     toasts: Vec<Toast>,
     data_dir: String,
+    commands: Receiver<Command>,
+    tray: Option<Tray>,
+    /// Set when the user really wants to quit (tray menu), so the close isn't turned into a hide.
+    quitting: bool,
+    login_item_error: Option<String>,
 }
 
 impl GetCraftApp {
-    pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
+    pub fn new(cc: &eframe::CreationContext<'_>, paths: Paths, listener: Option<TcpListener>, hidden: bool) -> Self {
         egui_extras::install_image_loaders(&cc.egui_ctx);
         theme::apply(&cc.egui_ctx);
 
-        let paths = Paths::new().expect("no home directory");
         let data_dir = paths.state_file.parent().map(|p| p.display().to_string()).unwrap_or_default();
         let installer = Installer::new(&paths);
         let (tx, events) = mpsc::channel();
@@ -72,6 +78,21 @@ impl GetCraftApp {
             },
         );
         engine.start();
+
+        let (cmd_tx, commands) = mpsc::channel();
+        let ctx = cc.egui_ctx.clone();
+        let sender = CommandSender::new(cmd_tx, move || ctx.request_repaint());
+        if let Some(listener) = listener {
+            let sender = sender.clone();
+            instance::serve(listener, move || sender.send(Command::Show));
+        }
+        background::on_reopen(sender.clone());
+        let tray = Tray::create(sender);
+        if hidden {
+            background::set_dock_visible(false);
+        }
+        let login_item_error = background::sync_launch_at_login(engine.snapshot().settings.launch_at_login).err();
+
         Self {
             engine,
             events,
@@ -82,6 +103,31 @@ impl GetCraftApp {
             notes_for: None,
             toasts: Vec::new(),
             data_dir,
+            commands,
+            tray,
+            quitting: false,
+            login_item_error,
+        }
+    }
+
+    fn show_window(&self, ctx: &egui::Context) {
+        background::set_dock_visible(true);
+        ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
+        ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(false));
+        ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+    }
+
+    fn hide_window(&self, ctx: &egui::Context) {
+        ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
+        background::set_dock_visible(false);
+        let settings = self.engine.snapshot().settings;
+        if !settings.background_hint_shown {
+            let place = if cfg!(target_os = "macos") { "menu bar" } else { "system tray" };
+            notify::message(
+                "GetCraft is still running",
+                &format!("It keeps your apps up to date from the {place}. Quit it from there."),
+            );
+            self.engine.update_settings(|s| s.background_hint_shown = true);
         }
     }
 
@@ -111,6 +157,33 @@ impl GetCraftApp {
 }
 
 impl eframe::App for GetCraftApp {
+    /// Runs even while the window is hidden, so tray and Dock requests are always handled.
+    fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        while let Ok(cmd) = self.commands.try_recv() {
+            match cmd {
+                Command::Show => self.show_window(ctx),
+                Command::CheckNow => self.engine.refresh(),
+                Command::Quit => {
+                    self.quitting = true;
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                }
+            }
+        }
+
+        let snap = self.engine.snapshot();
+        if ctx.input(|i| i.viewport().close_requested())
+            && !self.quitting
+            && snap.settings.run_in_background
+            && self.tray.is_some()
+        {
+            ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+            self.hide_window(ctx);
+        }
+        if let Some(tray) = &mut self.tray {
+            tray.set_updates(snap.tools.iter().filter(|t| t.update_available()).count());
+        }
+    }
+
     fn ui(&mut self, ui: &mut Ui, _frame: &mut eframe::Frame) {
         while let Ok(event) = self.events.try_recv() {
             match event {
@@ -439,8 +512,34 @@ impl GetCraftApp {
                 if hours != snap.settings.check_interval_hours {
                     self.engine.update_settings(|s| s.check_interval_hours = hours);
                 }
+            });
+
+            section(ui, "Background", |ui| {
+                let place = if cfg!(target_os = "macos") { "menu bar" } else { "system tray" };
+                let mut run_in_background = snap.settings.run_in_background;
+                if ui
+                    .checkbox(&mut run_in_background, format!("Keep running in the {place} when the window is closed"))
+                    .changed()
+                {
+                    self.engine.update_settings(|s| s.run_in_background = run_in_background);
+                }
+                let mut launch_at_login = snap.settings.launch_at_login;
+                let installed = background::is_installed_build();
+                if ui
+                    .add_enabled(installed, egui::Checkbox::new(&mut launch_at_login, "Start GetCraft when I log in"))
+                    .changed()
+                {
+                    self.engine.update_settings(|s| s.launch_at_login = launch_at_login);
+                    self.login_item_error = background::sync_launch_at_login(launch_at_login).err();
+                }
+                if !installed {
+                    ui.label(RichText::new("Available once GetCraft is installed (not in development builds).").small().color(FAINT));
+                }
+                if let Some(e) = &self.login_item_error {
+                    ui.label(RichText::new(format!("Couldn't change the login item: {e}")).small().color(DANGER));
+                }
                 ui.label(
-                    RichText::new("GetCraft checks while it's open. Background checks when the window is closed are coming soon.")
+                    RichText::new("While GetCraft runs it checks for updates and applies automatic ones, even with its window closed.")
                         .small()
                         .color(FAINT),
                 );

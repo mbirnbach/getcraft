@@ -7,7 +7,7 @@ cd "$(dirname "$0")/.."
 
 PROFILE="${1:-release}"
 VERSION=$(cargo metadata --no-deps --format-version 1 | python3 -c "import json,sys; print(next(p['version'] for p in json.load(sys.stdin)['packages'] if p['name']=='getcraft'))")
-BUNDLE_ID="${GETCRAFT_BUNDLE_ID:-io.github.mbirnbach.GetCraft}"
+BUNDLE_ID="${GETCRAFT_BUNDLE_ID:-net.brnbch.getcraft}"
 
 if [[ "$PROFILE" == "release" ]]; then
   cargo build --release -p getcraft --target aarch64-apple-darwin
