@@ -1,12 +1,15 @@
 # Builds GetCraft for every platform when a `v*` tag is pushed. Assets follow the Crafting Apps
-# naming scheme (getcraft-<version>-<os>-<arch>.<ext>) so GetCraft can later update itself with the
-# same asset matcher it uses for the apps.
+# naming scheme (getcraft-<version>-<os>-<arch>.<ext>), which is what GetCraft's self-updater
+# looks for.
 #
-# macOS signing needs these repository secrets:
+# macOS signing uses these repository secrets (Settings → Secrets and variables → Actions):
 #   APPLE_CERTIFICATE_P12      base64 of the "Developer ID Application" certificate (.p12)
 #   APPLE_CERTIFICATE_PASSWORD password of that .p12
 #   APPLE_SIGNING_IDENTITY     e.g. "Developer ID Application: Your Name (TEAMID)"
 #   APPLE_ID / APPLE_TEAM_ID / APPLE_APP_PASSWORD   for notarization (app-specific password)
+#
+# Without them the build is ad-hoc signed and the release is published as a *pre-release*, which
+# GetCraft's self-updater ignores, so unsigned builds never reach users automatically.
 name: Release
 
 on:
@@ -22,14 +25,21 @@ env:
 jobs:
   macos:
     runs-on: macos-latest
+    outputs:
+      signed: ${{ steps.mode.outputs.signed }}
+    env:
+      HAS_SIGNING: ${{ secrets.APPLE_CERTIFICATE_P12 != '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-apple-darwin, x86_64-apple-darwin
       - uses: Swatinem/rust-cache@v2
+      - id: mode
+        run: echo "signed=$HAS_SIGNING" >> "$GITHUB_OUTPUT"
       - run: scripts/bundle-macos.sh release
-      - name: Sign
+      - name: Sign with Developer ID
+        if: env.HAS_SIGNING == 'true'
         env:
           P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
           P12_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
@@ -44,17 +54,23 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple: -s -k ci "$KEYCHAIN"
           security list-keychains -d user -s "$KEYCHAIN"
           codesign --force --options runtime --timestamp --sign "$IDENTITY" target/bundle/GetCraft.app
-      - name: Build, notarize and staple the DMG
+      - name: Ad-hoc sign (no signing secrets configured)
+        if: env.HAS_SIGNING != 'true'
+        run: codesign --force --deep --sign - target/bundle/GetCraft.app
+      - name: Build the DMG
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          mkdir -p target/dmg && cp -R target/bundle/GetCraft.app target/dmg/ && ln -s /Applications target/dmg/Applications
+          hdiutil create -volname GetCraft -srcfolder target/dmg -ov -format UDZO "target/getcraft-$VERSION-macos-universal.dmg"
+      - name: Sign, notarize and staple the DMG
+        if: env.HAS_SIGNING == 'true'
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
           IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          DMG="target/getcraft-$VERSION-macos-universal.dmg"
-          mkdir -p target/dmg && cp -R target/bundle/GetCraft.app target/dmg/ && ln -s /Applications target/dmg/Applications
-          hdiutil create -volname GetCraft -srcfolder target/dmg -ov -format UDZO "$DMG"
+          DMG=$(ls target/getcraft-*.dmg)
           codesign --timestamp --sign "$IDENTITY" "$DMG"
           xcrun notarytool submit "$DMG" --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD" --wait
           xcrun stapler staple "$DMG"
@@ -79,7 +95,7 @@ jobs:
           targets: ${{ matrix.target }}
       - uses: Swatinem/rust-cache@v2
       - run: cargo build --release -p getcraft --target ${{ matrix.target }}
-      # TODO: sign once a certificate is available (e.g. SignPath's free OSS program).
+      # TODO: code signing (set up together with macOS signing).
       - shell: pwsh
         run: |
           $version = "${{ github.ref_name }}".TrimStart("v")
@@ -92,21 +108,37 @@ jobs:
           path: dist/*.zip
 
   linux:
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            arch: x86_64
+          - runner: ubuntu-24.04-arm
+            arch: aarch64
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: sudo apt-get update && sudo apt-get install -y libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev
       - run: cargo build --release -p getcraft
-      # TODO: AppImage packaging.
-      - run: |
+      - name: Build the AppImage
+        run: |
           VERSION="${GITHUB_REF_NAME#v}"
-          mkdir -p dist && tar -C target/release -czf "dist/getcraft-$VERSION-linux-x86_64.tar.gz" getcraft
+          mkdir -p AppDir/usr/bin dist
+          cp target/release/getcraft AppDir/usr/bin/getcraft
+          cp assets/getcraft-256.png AppDir/getcraft.png
+          ln -s usr/bin/getcraft AppDir/AppRun
+          printf '%s\n' '[Desktop Entry]' 'Type=Application' 'Name=GetCraft' \
+            'Comment=Install and update the Crafting Apps' 'Exec=getcraft' 'Icon=getcraft' \
+            'Categories=Utility;' 'Terminal=false' > AppDir/getcraft.desktop
+          curl -fsSL -o appimagetool "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-${{ matrix.arch }}.AppImage"
+          chmod +x appimagetool
+          ARCH=${{ matrix.arch }} ./appimagetool --appimage-extract-and-run AppDir "dist/getcraft-$VERSION-linux-${{ matrix.arch }}.AppImage"
       - uses: actions/upload-artifact@v4
         with:
-          name: linux
-          path: dist/*.tar.gz
+          name: linux-${{ matrix.arch }}
+          path: dist/*.AppImage
 
   publish:
     needs: [macos, windows, linux]
@@ -121,3 +153,5 @@ jobs:
         with:
           files: dist/*
           generate_release_notes: true
+          # Unsigned builds stay pre-releases so the self-updater never offers them.
+          prerelease: ${{ needs.macos.outputs.signed != 'true' || contains(github.ref_name, '-') }}

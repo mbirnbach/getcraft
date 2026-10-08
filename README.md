@@ -17,6 +17,8 @@ manual updates.
 - Checks for updates regularly and, per app, either **notifies you** or **updates automatically**.
   Apps are never replaced while they're open.
 - Picks up new `*craft` apps from the `storytold` GitHub organisation automatically.
+- Keeps running in the menu bar / system tray when its window is closed, starts at login (hidden),
+  and updates itself.
 
 ## How it works
 
@@ -50,12 +52,18 @@ cargo run -p getcraft                                 # the app
 cargo test --workspace                                # unit tests
 cargo run -p getcraft-core --example smoke pdfcraft   # live end-to-end install into a temp dir
 scripts/bundle-macos.sh debug                         # build target/bundle/GetCraft.app
+cargo run --release -p getcraft --example render_icon # regenerate the app icons in assets/
 ```
+
+Releases are built by pushing a `v*` tag (see `.github/workflows/release.yml`). Until the signing
+secrets are configured, releases are ad-hoc signed and published as pre-releases, which the
+self-updater ignores.
 
 Useful environment variables:
 
 - `GETCRAFT_INDEX_URL` points at a different `index.json` (e.g. a local one).
 - `GETCRAFT_GITHUB_TOKEN` is used for direct API calls, which lifts the rate limit while developing.
+- `GETCRAFT_TREAT_AS_INSTALLED=1` lets a development build register the login item.
 - `RUST_LOG=debug` turns on verbose logging.
 
 ## License

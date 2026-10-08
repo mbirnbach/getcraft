@@ -1,5 +1,5 @@
-//! The GetCraft mark (a diamond with a diamond-shaped cut-out), rasterised in code so the tray
-//! icon, window icon and app icon all come from one definition.
+//! The GetCraft mark (a diamond with a diamond-shaped cut-out), rasterised in code for the tray
+//! icon. The full-colour app icon is rendered by `examples/render_icon.rs`.
 
 /// Renders the mark as RGBA pixels. `fill` is used for the diamond; everything else is
 /// transparent. `inset` (0..1) is the size of the cut-out relative to the diamond.

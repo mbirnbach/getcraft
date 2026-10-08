@@ -31,7 +31,9 @@ fn main() -> eframe::Result {
 
     notify::init();
 
-    let icon = egui::IconData { rgba: logo::rgba(256, [0x4f, 0x8c, 0xff], 0.04, 0.38), width: 256, height: 256 };
+    let icon =
+        image::load_from_memory(include_bytes!("../../../assets/getcraft-256.png")).expect("bundled icon").into_rgba8();
+    let icon = egui::IconData { width: icon.width(), height: icon.height(), rgba: icon.into_raw() };
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_title("GetCraft")

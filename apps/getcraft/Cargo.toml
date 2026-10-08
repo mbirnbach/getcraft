@@ -13,7 +13,7 @@ egui = "0.36"
 egui_extras = { version = "0.36", features = ["image", "http"] }
 env_logger = "0.11.11"
 getcraft-core = { version = "0.1.0", path = "../../crates/getcraft-core" }
-image = { version = "0.25.10", default-features = false, features = ["png"] }
+image = { version = "0.25.10", default-features = false, features = ["png", "ico"] }
 log = "0.4.34"
 notify-rust = "4.18.2"
 open = "5.4.4"
@@ -26,3 +26,6 @@ objc2-foundation = "0.3.2"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 gtk = "0.18"
+
+[target."cfg(windows)".build-dependencies]
+winresource = "0.1.31"
