@@ -7,7 +7,7 @@
 //! same margins as the Crafting Apps' icons, so GetCraft sits at the same size next to them in
 //! the Dock. Pass a Crafting App's 1024px icon to measure those margins again.
 //!
-//! Writes `assets/getcraft-1024.png` (macOS margins), `assets/getcraft-256.png` and
+//! Writes `assets/getcraft-1024.png` and `assets/getcraft-macos-256.png` (macOS margins), `assets/getcraft-256.png` and
 //! `assets/getcraft-64.png` (full-bleed), `assets/getcraft.ico` and (on macOS, via `iconutil`)
 //! `assets/getcraft.icns`.
 
@@ -102,6 +102,10 @@ fn main() {
     let offset = ((1024 - tile_px) / 2) as i64;
     image::imageops::overlay(&mut mac_icon, &scaled, offset, offset);
     mac_icon.save(assets.join("getcraft-1024.png")).unwrap();
+    // The window icon on macOS becomes the Dock icon, so it needs the macOS margins too.
+    image::imageops::resize(&mac_icon, 256, 256, FilterType::Lanczos3)
+        .save(assets.join("getcraft-macos-256.png"))
+        .unwrap();
 
     // Windows, Linux and in-app use: full-bleed.
     let resized = |s: u32| image::imageops::resize(&tile, s, s, FilterType::Lanczos3);
