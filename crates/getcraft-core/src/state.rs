@@ -39,7 +39,11 @@ pub struct Settings {
     pub check_interval_hours: u32,
     /// Closing the window keeps GetCraft running in the menu bar / tray.
     pub run_in_background: bool,
+    /// Off until the user agrees: starting at login changes the system's configuration, so
+    /// GetCraft asks first (see `login_prompt_answered`).
     pub launch_at_login: bool,
+    /// Whether the user has answered the "start at login?" question.
+    pub login_prompt_answered: bool,
     /// Whether we've told the user that closing the window doesn't quit.
     pub background_hint_shown: bool,
 }
@@ -51,7 +55,8 @@ impl Default for Settings {
             policies: BTreeMap::new(),
             check_interval_hours: 6,
             run_in_background: true,
-            launch_at_login: true,
+            launch_at_login: false,
+            login_prompt_answered: false,
             background_hint_shown: false,
         }
     }

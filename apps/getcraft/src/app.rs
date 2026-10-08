@@ -560,7 +560,10 @@ impl GetCraftApp {
                     .add_enabled(installed, egui::Checkbox::new(&mut launch_at_login, "Start GetCraft when I log in"))
                     .changed()
                 {
-                    self.engine.update_settings(|s| s.launch_at_login = launch_at_login);
+                    self.engine.update_settings(|s| {
+                        s.launch_at_login = launch_at_login;
+                        s.login_prompt_answered = true;
+                    });
                     self.login_item_error = background::sync_launch_at_login(launch_at_login).err();
                 }
                 if !installed {
@@ -595,6 +598,7 @@ impl GetCraftApp {
                     ui.hyperlink_to("The Crafting Apps", "https://getartcraft.com/apps");
                     ui.hyperlink_to("Source code", "https://github.com/mbirnbach/getcraft");
                     ui.hyperlink_to("Licenses", "https://github.com/mbirnbach/getcraft/blob/main/NOTICE");
+                    ui.hyperlink_to("Privacy", "https://github.com/mbirnbach/getcraft/blob/main/PRIVACY.md");
                 });
             });
 
@@ -821,6 +825,44 @@ fn more_menu(ui: &mut Ui, entry: &ToolEntry, actions: &mut Vec<Action>) {
 
 impl GetCraftApp {
     fn dialogs(&mut self, ctx: &egui::Context, snap: &Snapshot, actions: &mut Vec<Action>) {
+        // Starting at login changes the system's configuration, so ask once instead of just
+        // doing it. Development builds never register a login item, so they never ask.
+        if !snap.settings.login_prompt_answered && !self.hidden && background::is_installed_build() {
+            let mut answer = None;
+            egui::Modal::new(Id::new("login-prompt")).show(ctx, |ui| {
+                ui.set_width(400.0);
+                ui.horizontal(|ui| {
+                    logo(ui, 36.0);
+                    ui.label(RichText::new("Keep your apps up to date?").size(17.0).strong());
+                });
+                ui.add_space(4.0);
+                let place = if cfg!(target_os = "macos") { "menu bar" } else { "system tray" };
+                ui.label(
+                    RichText::new(format!(
+                        "GetCraft can start when you log in and check for updates quietly from the {place}. \
+                         You can change this any time in Settings."
+                    ))
+                    .color(MUTED),
+                );
+                ui.add_space(8.0);
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    if ui.add(theme::primary("Start at login")).clicked() {
+                        answer = Some(true);
+                    }
+                    if ui.add(theme::pill("Not now")).clicked() {
+                        answer = Some(false);
+                    }
+                });
+            });
+            if let Some(enabled) = answer {
+                self.engine.update_settings(|s| {
+                    s.launch_at_login = enabled;
+                    s.login_prompt_answered = true;
+                });
+                self.login_item_error = background::sync_launch_at_login(enabled).err();
+            }
+        }
+
         if let Some(id) = self.confirm_uninstall.clone() {
             let name = snap.tools.iter().find(|t| t.tool.id == id).map_or(id.clone(), |t| t.tool.name.clone());
             let modal = egui::Modal::new(Id::new("confirm-uninstall")).show(ctx, |ui| {

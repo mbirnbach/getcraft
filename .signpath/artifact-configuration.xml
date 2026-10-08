@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  SignPath artifact configuration "windows-portable" for GetCraft's Windows release. Kept here for
+  review and versioning; paste it into the SignPath project when it changes.
+
+  The release workflow uploads `dist/` as one GitHub artifact (which arrives as a zip) holding a
+  portable folder per architecture: x64/ and arm64/, each with GetCraft.exe and the license
+  files. Only the two executables are signed. product-name and product-version are checked
+  against each exe's version resource, so only GetCraft builds of the tagged version can be
+  signed.
+-->
+<artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
+  <parameters>
+    <parameter name="version" required="true" />
+  </parameters>
+  <zip-file>
+    <directory path="x64">
+      <pe-file path="GetCraft.exe" product-name="GetCraft" product-version="${version}">
+        <authenticode-sign />
+      </pe-file>
+    </directory>
+    <directory path="arm64">
+      <pe-file path="GetCraft.exe" product-name="GetCraft" product-version="${version}">
+        <authenticode-sign />
+      </pe-file>
+    </directory>
+  </zip-file>
+</artifact-configuration>

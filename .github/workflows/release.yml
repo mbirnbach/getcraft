@@ -2,22 +2,34 @@
 # naming scheme (getcraft-<version>-<os>-<arch>.<ext>), which is what GetCraft's self-updater
 # looks for.
 #
-# macOS signing uses these repository secrets (Settings → Secrets and variables → Actions):
-#   APPLE_CERTIFICATE_P12      base64 of the "Developer ID Application" certificate (.p12)
-#   APPLE_CERTIFICATE_PASSWORD password of that .p12
-#   APPLE_SIGNING_IDENTITY     e.g. "Developer ID Application: Your Name (TEAMID)"
-#   APPLE_ID / APPLE_TEAM_ID / APPLE_APP_PASSWORD   for notarization (app-specific password)
+# Signing switches on by itself once these are configured (Settings → Secrets and variables →
+# Actions):
 #
-# Without them the build is ad-hoc signed and the release is published as a *pre-release*, which
-# GetCraft's self-updater ignores, so unsigned builds never reach users automatically.
+#   macOS, Developer ID + notarization (secrets):
+#     APPLE_CERTIFICATE_P12        base64 of the "Developer ID Application" certificate (.p12)
+#     APPLE_CERTIFICATE_PASSWORD   password of that .p12
+#     APPLE_API_KEY                base64 of an App Store Connect API key (.p8)
+#     APPLE_API_KEY_ID             its key ID
+#     APPLE_API_ISSUER_ID          the issuer ID shown above the keys list
+#
+#   Windows, SignPath Foundation:
+#     SIGNPATH_API_TOKEN           secret: API token of the SignPath CI user (submitter)
+#     SIGNPATH_ORGANIZATION_ID     variable: the SignPath organization ID
+#
+# A release is published as a normal release only if both macOS and Windows were signed.
+# Otherwise it's a *pre-release*, which GetCraft's self-updater ignores, so unsigned builds never
+# reach users automatically.
 name: Release
 
 on:
   push:
     tags: ["v*"]
+  # Manual runs are dry runs: everything is built and packaged, nothing is published.
+  workflow_dispatch:
 
 permissions:
   contents: write
+  actions: read
 
 env:
   CARGO_TERM_COLOR: always
@@ -28,7 +40,7 @@ jobs:
     outputs:
       signed: ${{ steps.mode.outputs.signed }}
     env:
-      HAS_SIGNING: ${{ secrets.APPLE_CERTIFICATE_P12 != '' }}
+      HAS_SIGNING: ${{ secrets.APPLE_CERTIFICATE_P12 != '' && secrets.APPLE_API_KEY != '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -38,42 +50,72 @@ jobs:
       - id: mode
         run: echo "signed=$HAS_SIGNING" >> "$GITHUB_OUTPUT"
       - run: scripts/bundle-macos.sh release
-      - name: Sign with Developer ID
+
+      - name: Import the Developer ID certificate
         if: env.HAS_SIGNING == 'true'
         env:
           P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
           P12_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          API_KEY: ${{ secrets.APPLE_API_KEY }}
         run: |
-          KEYCHAIN="$RUNNER_TEMP/build.keychain"
+          KEYCHAIN="$RUNNER_TEMP/build.keychain-db"
           echo "$P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
           security create-keychain -p ci "$KEYCHAIN"
           security set-keychain-settings -lut 21600 "$KEYCHAIN"
           security unlock-keychain -p ci "$KEYCHAIN"
           security import "$RUNNER_TEMP/cert.p12" -k "$KEYCHAIN" -P "$P12_PASSWORD" -T /usr/bin/codesign
-          security set-key-partition-list -S apple-tool:,apple: -s -k ci "$KEYCHAIN"
-          security list-keychains -d user -s "$KEYCHAIN"
-          codesign --force --options runtime --timestamp --sign "$IDENTITY" target/bundle/GetCraft.app
+          security set-key-partition-list -S apple-tool:,apple: -s -k ci "$KEYCHAIN" > /dev/null
+          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
+          rm "$RUNNER_TEMP/cert.p12"
+          IDENTITY=$(security find-identity -v -p codesigning "$KEYCHAIN" | grep "Developer ID Application" | head -1 | sed -E 's/.*"(.*)"/\1/')
+          test -n "$IDENTITY" || { echo "::error::No Developer ID Application identity in the certificate"; exit 1; }
+          echo "IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
+          echo "APPLE_API_KEY_PATH=$RUNNER_TEMP/AuthKey.p8" >> "$GITHUB_ENV"
+          echo "$API_KEY" | base64 --decode > "$RUNNER_TEMP/AuthKey.p8"
+
+      - name: Sign and notarize the app
+        if: env.HAS_SIGNING == 'true'
+        env:
+          KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          ISSUER: ${{ secrets.APPLE_API_ISSUER_ID }}
+        run: |
+          APP=target/bundle/GetCraft.app
+          codesign --force --options runtime --timestamp --sign "$IDENTITY" "$APP"
+          codesign --verify --strict --verbose=2 "$APP"
+          ditto -c -k --keepParent "$APP" "$RUNNER_TEMP/GetCraft.zip"
+          xcrun notarytool submit "$RUNNER_TEMP/GetCraft.zip" --key "$APPLE_API_KEY_PATH" --key-id "$KEY_ID" --issuer "$ISSUER" --wait --timeout 30m
+          # Stapling the app too means it passes Gatekeeper offline after being copied out of the DMG.
+          xcrun stapler staple "$APP"
+
       - name: Ad-hoc sign (no signing secrets configured)
         if: env.HAS_SIGNING != 'true'
         run: codesign --force --deep --sign - target/bundle/GetCraft.app
+
       - name: Build the DMG
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           mkdir -p target/dmg && cp -R target/bundle/GetCraft.app target/dmg/ && ln -s /Applications target/dmg/Applications
           hdiutil create -volname GetCraft -srcfolder target/dmg -ov -format UDZO "target/getcraft-$VERSION-macos-universal.dmg"
+
       - name: Sign, notarize and staple the DMG
         if: env.HAS_SIGNING == 'true'
         env:
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
-          IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          ISSUER: ${{ secrets.APPLE_API_ISSUER_ID }}
         run: |
           DMG=$(ls target/getcraft-*.dmg)
           codesign --timestamp --sign "$IDENTITY" "$DMG"
-          xcrun notarytool submit "$DMG" --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD" --wait
+          xcrun notarytool submit "$DMG" --key "$APPLE_API_KEY_PATH" --key-id "$KEY_ID" --issuer "$ISSUER" --wait --timeout 30m
           xcrun stapler staple "$DMG"
+          xcrun stapler validate "$DMG"
+          spctl --assess --type open --context context:primary-signature --verbose=2 "$DMG"
+
+      - name: Remove signing material
+        if: always() && env.HAS_SIGNING == 'true'
+        run: |
+          security delete-keychain "$RUNNER_TEMP/build.keychain-db" || true
+          rm -f "$RUNNER_TEMP/AuthKey.p8"
+
       - uses: actions/upload-artifact@v4
         with:
           name: macos
@@ -81,32 +123,83 @@ jobs:
 
   windows:
     runs-on: windows-latest
-    strategy:
-      matrix:
-        include:
-          - target: x86_64-pc-windows-msvc
-            arch: x64
-          - target: aarch64-pc-windows-msvc
-            arch: arm64
+    outputs:
+      signed: ${{ steps.mode.outputs.signed }}
+    env:
+      HAS_SIGNING: ${{ secrets.SIGNPATH_API_TOKEN != '' && vars.SIGNPATH_ORGANIZATION_ID != '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.target }}
+          targets: x86_64-pc-windows-msvc, aarch64-pc-windows-msvc
       - uses: Swatinem/rust-cache@v2
-      - run: cargo build --release -p getcraft --target ${{ matrix.target }}
-      # TODO: code signing (set up together with macOS signing).
-      - shell: pwsh
+      - id: mode
+        shell: bash
         run: |
-          $version = "${{ github.ref_name }}".TrimStart("v")
-          New-Item -ItemType Directory -Force dist/GetCraft | Out-Null
-          Copy-Item target/${{ matrix.target }}/release/getcraft.exe dist/GetCraft/GetCraft.exe
-          Copy-Item LICENSE-MIT, LICENSE-APACHE, NOTICE, ATTRIBUTION.md, assets/LICENSE-icon.txt dist/GetCraft/
-          Compress-Archive -Path dist/GetCraft -DestinationPath "dist/getcraft-$version-windows-${{ matrix.arch }}-portable.zip"
+          echo "signed=$HAS_SIGNING" >> "$GITHUB_OUTPUT"
+          echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+      - run: cargo build --release -p getcraft --target x86_64-pc-windows-msvc --target aarch64-pc-windows-msvc
+
+      # One folder per architecture; both are signed in a single request (one approval).
+      - name: Stage the portable folders
+        shell: pwsh
+        run: |
+          foreach ($pair in @(@("x64", "x86_64-pc-windows-msvc"), @("arm64", "aarch64-pc-windows-msvc"))) {
+            $dir = "dist/$($pair[0])"
+            New-Item -ItemType Directory -Force $dir | Out-Null
+            Copy-Item "target/$($pair[1])/release/getcraft.exe" "$dir/GetCraft.exe"
+            Copy-Item LICENSE-MIT, LICENSE-APACHE, NOTICE, ATTRIBUTION.md, assets/LICENSE-icon.txt $dir
+          }
+
+      - name: Upload the unsigned build for SignPath
+        if: env.HAS_SIGNING == 'true'
+        id: unsigned
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-unsigned
+          path: dist/
+
+      - name: Sign with SignPath (waits for manual approval)
+        if: env.HAS_SIGNING == 'true'
+        uses: signpath/github-action-submit-signing-request@v3
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: getcraft
+          signing-policy-slug: release-signing
+          artifact-configuration-slug: windows-portable
+          github-artifact-id: ${{ steps.unsigned.outputs.artifact-id }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 14400
+          output-artifact-directory: dist-signed
+          parameters: |
+            version: ${{ toJSON(env.VERSION) }}
+
+      - name: Use the signed executables
+        if: env.HAS_SIGNING == 'true'
+        shell: pwsh
+        run: |
+          foreach ($arch in "x64", "arm64") {
+            Copy-Item "dist-signed/$arch/GetCraft.exe" "dist/$arch/GetCraft.exe" -Force
+            $sig = Get-AuthenticodeSignature "dist/$arch/GetCraft.exe"
+            if ($sig.Status -ne "Valid") { throw "dist/$arch/GetCraft.exe is not validly signed: $($sig.StatusMessage)" }
+            Write-Host "$arch signed by $($sig.SignerCertificate.Subject)"
+          }
+
+      - name: Zip the portable builds
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force out | Out-Null
+          foreach ($arch in "x64", "arm64") {
+            Remove-Item -Recurse -Force "pkg" -ErrorAction SilentlyContinue
+            New-Item -ItemType Directory -Force "pkg/GetCraft" | Out-Null
+            Copy-Item "dist/$arch/*" "pkg/GetCraft/"
+            Compress-Archive -Path pkg/GetCraft -DestinationPath "out/getcraft-$env:VERSION-windows-$arch-portable.zip"
+          }
       - uses: actions/upload-artifact@v4
         with:
-          name: windows-${{ matrix.arch }}
-          path: dist/*.zip
+          name: windows
+          path: out/*.zip
 
   linux:
     strategy:
@@ -144,16 +237,18 @@ jobs:
 
   publish:
     needs: [macos, windows, linux]
+    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
         with:
           path: dist
+          pattern: "{macos,windows,linux-*}"
           merge-multiple: true
       - run: cd dist && sha256sum * > SHA256SUMS.txt
       - uses: softprops/action-gh-release@v2
         with:
           files: dist/*
           generate_release_notes: true
-          # Unsigned builds stay pre-releases so the self-updater never offers them.
-          prerelease: ${{ needs.macos.outputs.signed != 'true' || contains(github.ref_name, '-') }}
+          # Anything not fully signed stays a pre-release so the self-updater never offers it.
+          prerelease: ${{ needs.macos.outputs.signed != 'true' || needs.windows.outputs.signed != 'true' || contains(github.ref_name, '-') }}

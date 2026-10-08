@@ -31,6 +31,8 @@
   <a href="#download">Download</a> ·
   <a href="#how-it-works">How it works</a> ·
   <a href="#development">Development</a> ·
+  <a href="#privacy">Privacy</a> ·
+  <a href="#code-signing-policy">Code signing</a> ·
   <a href="#license-and-credits">License and credits</a>
 </p>
 
@@ -103,7 +105,8 @@ Get the latest version from the [releases page](https://github.com/mbirnbach/get
 
 > [!NOTE]
 > The current builds are early **pre-releases and not yet code-signed**, so macOS and Windows
-> will warn before opening them. Signed releases are next on the list.
+> will warn before opening them. Signed releases are on their way (see
+> [Code signing policy](#code-signing-policy)).
 
 Installed apps go to:
 
@@ -112,6 +115,26 @@ Installed apps go to:
 | macOS | `/Applications` (or `~/Applications` without admin rights) | Launchpad and Spotlight |
 | Windows | `%LOCALAPPDATA%\Programs\GetCraft\<app>` (portable build) | Start menu |
 | Linux | `~/.local/share/getcraft/apps/<app>` (AppImage) | Application menu |
+
+The first time it runs, GetCraft asks whether it may start when you log in. It never changes
+your login items without asking, and the choice can be changed in Settings.
+
+### Uninstalling GetCraft
+
+Apps installed with GetCraft stay installed when you remove GetCraft. To remove one, use its
+••• menu → *Uninstall* first (on macOS it goes to the Trash).
+
+1. Open GetCraft's Settings and turn off *Start GetCraft when I log in*.
+2. Quit GetCraft from the menu bar (macOS) or system tray (Windows, Linux): *Quit GetCraft*.
+3. Delete GetCraft itself: `GetCraft.app` on macOS, the `GetCraft` folder you unpacked on
+   Windows, or the `.AppImage` on Linux.
+4. Optionally delete its settings and cache:
+
+| System | Folders |
+|---|---|
+| macOS | `~/Library/Application Support/GetCraft`, `~/Library/Caches/GetCraft` |
+| Windows | `%APPDATA%\GetCraft`, `%LOCALAPPDATA%\GetCraft` |
+| Linux | `~/.config/GetCraft`, `~/.cache/GetCraft` |
 
 ## How it works
 
@@ -150,6 +173,31 @@ Useful environment variables:
 - `GETCRAFT_GITHUB_TOKEN` is used for direct API calls and lifts the rate limit while developing.
 - `GETCRAFT_TREAT_AS_INSTALLED=1` lets a development build register the login item.
 - `RUST_LOG=debug` turns on verbose logging.
+
+## Privacy
+
+GetCraft has no accounts, analytics or telemetry. It only connects to GitHub, to check for new
+versions and to download the apps you choose. The [privacy policy](PRIVACY.md) lists every
+address it contacts and everything it stores on your computer.
+
+## Code signing policy
+
+Free code signing for Windows is provided by [SignPath.io](https://about.signpath.io/), certificate
+by [SignPath Foundation](https://signpath.org/). macOS builds are signed with the maintainer's
+Apple Developer ID and notarized by Apple.
+
+Only binaries built from this repository by its GitHub Actions
+[release workflow](.github/workflows/release.yml) are signed, and every signing request is
+approved by hand.
+
+| Role | Members |
+|---|---|
+| Authors (committers) | [@mbirnbach](https://github.com/mbirnbach) |
+| Reviewers | [@mbirnbach](https://github.com/mbirnbach) |
+| Approvers | [@mbirnbach](https://github.com/mbirnbach) |
+
+Privacy policy: see [PRIVACY.md](PRIVACY.md). GetCraft only transfers information to the GitHub
+services listed there, as needed to check for and download updates.
 
 ## License and credits
 
