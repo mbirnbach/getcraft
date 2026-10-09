@@ -13,11 +13,17 @@ pub struct Publisher {
     pub macos_team: &'static str,
     /// macOS bundle identifiers are this prefix plus the tool id.
     pub bundle_prefix: &'static str,
+    /// The `Manufacturer` of their Windows Installer packages, as shown in Settings → Apps.
+    pub windows_manufacturer: &'static str,
 }
 
 /// The ArtCraft team, publisher of the Crafting Apps.
-pub const PUBLISHERS: &[Publisher] =
-    &[Publisher { github_owner: "storytold", macos_team: "DJ6XS33FX8", bundle_prefix: "ai.storyteller." }];
+pub const PUBLISHERS: &[Publisher] = &[Publisher {
+    github_owner: "storytold",
+    macos_team: "DJ6XS33FX8",
+    bundle_prefix: "ai.storyteller.",
+    windows_manufacturer: "Learning Machines LLC",
+}];
 
 /// GetCraft itself, for self-updates.
 pub const GETCRAFT_REPO: &str = "mbirnbach/getcraft";

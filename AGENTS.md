@@ -47,6 +47,7 @@ crates/getcraft-core/     everything UI-independent
   src/install/            per-OS installers (macos.rs, windows.rs, linux.rs) + archive.rs (safe unzip)
   src/catalog.rs, state.rs, version.rs, platform.rs
   examples/smoke.rs       live end-to-end install into a temp folder
+  examples/msi_roundtrip.rs  Windows: find, update and uninstall an MSI-installed app (CI only)
 catalog.toml              curated list of apps (names, descriptions, categories); also fetched remotely
 keys/update-signing.pub   minisign public key compiled into GetCraft (key ID B92D9E0E21D756AC)
 packaging/windows/getcraft.iss   Inno Setup installer script
@@ -79,14 +80,20 @@ Rust 2024 edition, workspace version in the root `Cargo.toml` (shared by all cra
     of the tool's own repo on github.com
 - **Downloads:** SHA-256 checksum (from the release's `SHA256SUMS.txt`) is mandatory and the size
   must match the release metadata exactly (cap 2 GiB). Every Crafting App publishes checksums.
-- **Installers (no admin rights anywhere):**
+- **Installers (no admin rights, except when the user updates or removes an MSI copy):**
   - macOS: mount the DMG, copy the single `.app` to `/Applications` (or `~/Applications` if not
     writable), verify `codesign` against the publisher's team + bundle ID, then swap into place.
     Never overwrites an unrelated app with the same name. Hand-installed copies are detected
     (by bundle ID) and adopted. Uninstall moves to the Trash and checks the bundle ID first.
   - Windows: the **portable zip** (not the apps' MSIs), unpacked with limits into
     `%LOCALAPPDATA%\Programs\GetCraft\<id>`, program must be `<id>.exe`, plus a Start menu
-    shortcut. Hand-installed MSI copies aren't detected (issue #9).
+    shortcut. Copies installed with the apps' own MSI (per-machine, `Program Files\<Name>`) are
+    found through HKLM `App Paths\<id>.exe` plus the uninstall entry (publisher
+    "Learning Machines LLC", name, version; both registry views) and recorded with `msi: true`.
+    They're updated by running the new checksum-verified `.msi` (`msiexec /i … /passive`, Windows
+    asks for admin rights; the desktop-shortcut choice is kept) and removed with `msiexec /x
+    {product code}`, only when the user clicks: "Update automatically" falls back to notifying for
+    them. msiexec logs go to the work folder.
   - Linux: the AppImage into `~/.local/share/getcraft/apps/<id>` plus an escaped `.desktop` entry.
   - Apps are never updated while running (`install::is_running`).
 - **Update policies per app:** notify (default), automatic, or off. Checks at start and every
@@ -146,7 +153,8 @@ hands off to the installed GetCraft if it's running (single instance), so stop o
 - **Workflows:** `ci.yml` (fmt, clippy, tests on macOS/Windows/Linux; smoke tests on Windows x64,
   Windows ARM64 `windows-11-arm`, macOS, Linux under Xvfb), `security.yml` (`cargo-deny`
   advisories on every change and weekly; CodeQL for Rust and Actions), `index.yml` (release
-  index), `release.yml` (on `v*` tags; manual runs are dry runs that publish nothing).
+  index), `msi.yml` (Windows MSI round trip with a real PhotoCraft MSI, on installer changes,
+  not required), `release.yml` (on `v*` tags; manual runs are dry runs that publish nothing).
 - **All actions are pinned to commit SHAs** (comment shows the version); Dependabot updates them
   weekly. `appimagetool` 1.9.1 and the AppImage runtime 20251108 are pinned with SHA-256 hashes.
 - **Rulesets:** `main` requires a PR, squash merge, resolved threads and 8 checks
@@ -216,8 +224,6 @@ hands off to the installed GetCraft if it's running (single instance), so stop o
 
 - [#7](https://github.com/mbirnbach/getcraft/issues/7): use less memory in the background (true
   hidden mode without a window).
-- [#9](https://github.com/mbirnbach/getcraft/issues/9): Windows, recognise Crafting Apps installed
-  with their own MSI.
 - Windows code signing (SignPath declined; the pipeline in `release.yml` and `.signpath/` is ready
   if that changes).
 - A monochrome menu-bar (template) icon for macOS would look more native than the colour icon.

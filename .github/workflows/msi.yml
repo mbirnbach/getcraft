@@ -1,0 +1,49 @@
+name: MSI round trip
+
+# Installs an older Crafting App with its own .msi on a Windows runner, then lets GetCraft find,
+# update (by running the newer .msi) and uninstall it. Checks what the upstream packages register,
+# so it runs when the installer code changes and on demand; it isn't a required check.
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - crates/getcraft-core/src/install/**
+      - crates/getcraft-core/src/engine.rs
+      - crates/getcraft-core/examples/msi_roundtrip.rs
+      - .github/workflows/msi.yml
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  msi:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@686976e191b89faba57d3206551f0f330d8cb249 # stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+      - name: Install PhotoCraft 0.3.0 with its MSI
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $dir = Join-Path $env:RUNNER_TEMP old-msi
+          gh release download v0.3.0 -R storytold/photocraft -p photocraft-0.3.0-windows-x64.msi -p SHA256SUMS.txt -D $dir
+          $msi = Join-Path $dir photocraft-0.3.0-windows-x64.msi
+          $expected = (Select-String -Path (Join-Path $dir SHA256SUMS.txt) -Pattern 'photocraft-0.3.0-windows-x64.msi$').Line.Split(' ')[0]
+          if ((Get-FileHash $msi -Algorithm SHA256).Hash -ne $expected) { throw 'checksum mismatch' }
+          $p = Start-Process msiexec.exe -ArgumentList '/i', "`"$msi`"", '/qn', '/norestart', 'INSTALLDESKTOPSHORTCUT=0' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "msiexec exited with $($p.ExitCode)" }
+          Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\photocraft.exe'
+          Get-ChildItem HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall |
+            Get-ItemProperty | Where-Object Publisher -eq 'Learning Machines LLC' |
+            Select-Object PSChildName, DisplayName, DisplayVersion, Publisher, InstallLocation, WindowsInstaller
+      - name: Find, update and uninstall it with GetCraft
+        run: cargo run -p getcraft-core --example msi_roundtrip -- photocraft 0.3.0
+      - name: Windows Installer logs
+        if: always()
+        shell: pwsh
+        run: Get-ChildItem -Recurse -Filter *-msi.log $env:TEMP -ErrorAction SilentlyContinue | ForEach-Object { "== $_"; Get-Content $_ -Tail 40 }
