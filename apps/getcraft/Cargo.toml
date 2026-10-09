@@ -8,7 +8,7 @@ repository.workspace = true
 
 [dependencies]
 auto-launch = "0.6.0"
-eframe = "0.36"
+eframe = { version = "0.36", features = ["glow"] }
 egui = "0.36"
 egui_extras = { version = "0.36", features = ["image", "http"] }
 env_logger = "0.11.11"
@@ -29,3 +29,6 @@ gtk = "0.18"
 
 [target."cfg(windows)".build-dependencies]
 winresource = "0.1.31"
+
+[target."cfg(windows)".dependencies]
+windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging"] }

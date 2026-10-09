@@ -60,10 +60,22 @@ pub struct GetCraftApp {
     hidden: bool,
     login_item_error: Option<String>,
     ctx: egui::Context,
+    /// `--smoke-test`: count rendered frames and quit after a few.
+    smoke_test: bool,
+    frames: u32,
 }
 
+/// Enough frames to prove the renderer, fonts, images and layout all work.
+const SMOKE_TEST_FRAMES: u32 = 30;
+
 impl GetCraftApp {
-    pub fn new(cc: &eframe::CreationContext<'_>, paths: Paths, listener: Option<TcpListener>, hidden: bool) -> Self {
+    pub fn new(
+        cc: &eframe::CreationContext<'_>,
+        paths: Paths,
+        listener: Option<TcpListener>,
+        flags: crate::Flags,
+    ) -> Self {
+        let hidden = flags.hidden;
         egui_extras::install_image_loaders(&cc.egui_ctx);
         theme::apply(&cc.egui_ctx);
 
@@ -83,7 +95,10 @@ impl GetCraftApp {
                 ctx2.request_repaint();
             },
         );
-        engine.start();
+        // A smoke test checks that GetCraft starts; it stays off the network.
+        if !flags.smoke_test {
+            engine.start();
+        }
 
         let (cmd_tx, commands) = mpsc::channel();
         let ctx = cc.egui_ctx.clone();
@@ -97,7 +112,11 @@ impl GetCraftApp {
         if hidden {
             background::set_dock_visible(false);
         }
-        let login_item_error = background::sync_launch_at_login(engine.snapshot().settings.launch_at_login).err();
+        let login_item_error = if flags.smoke_test {
+            None
+        } else {
+            background::sync_launch_at_login(engine.snapshot().settings.launch_at_login).err()
+        };
 
         Self {
             engine,
@@ -115,6 +134,8 @@ impl GetCraftApp {
             hidden,
             login_item_error,
             ctx: cc.egui_ctx.clone(),
+            smoke_test: flags.smoke_test,
+            frames: 0,
         }
     }
 
@@ -211,6 +232,15 @@ impl eframe::App for GetCraftApp {
     }
 
     fn ui(&mut self, ui: &mut Ui, _frame: &mut eframe::Frame) {
+        if self.smoke_test {
+            self.frames += 1;
+            if self.frames == SMOKE_TEST_FRAMES {
+                log::info!("smoke test: rendered {SMOKE_TEST_FRAMES} frames, quitting");
+                self.quitting = true;
+                ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+            }
+            ui.ctx().request_repaint();
+        }
         while let Ok(event) = self.events.try_recv() {
             match event {
                 Event::Installed { tool, version, updated } => {
@@ -827,7 +857,8 @@ impl GetCraftApp {
     fn dialogs(&mut self, ctx: &egui::Context, snap: &Snapshot, actions: &mut Vec<Action>) {
         // Starting at login changes the system's configuration, so ask once instead of just
         // doing it. Development builds never register a login item, so they never ask.
-        if !snap.settings.login_prompt_answered && !self.hidden && background::is_installed_build() {
+        if !snap.settings.login_prompt_answered && !self.hidden && !self.smoke_test && background::is_installed_build()
+        {
             let mut answer = None;
             egui::Modal::new(Id::new("login-prompt")).show(ctx, |ui| {
                 ui.set_width(400.0);

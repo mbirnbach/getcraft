@@ -1155,6 +1155,7 @@ dependencies = [
  "egui-wgpu",
  "egui-winit",
  "egui_glow",
+ "glow",
  "glutin",
  "glutin-winit",
  "image",
@@ -1718,6 +1719,7 @@ dependencies = [
  "objc2-foundation 0.3.2",
  "open",
  "tray-icon",
+ "windows-sys 0.61.2",
  "winresource",
 ]
 

@@ -480,7 +480,8 @@ impl Engine {
             }
             m.launcher_package.clone().ok_or_else(|| Error::Install("no update downloaded".into()))?
         };
-        let target = location.apply(&package, &self.inner.paths.work_dir)?;
+        let version = self.lock().launcher.as_ref().map(|l| l.version.clone()).unwrap_or_default();
+        let target = location.apply(&package, &self.inner.paths.work_dir, &version)?;
         let _ = fs::remove_file(&package);
         Ok(target)
     }
