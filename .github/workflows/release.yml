@@ -295,6 +295,11 @@ jobs:
     needs: [macos, windows, linux]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      # For the build provenance attestations (see docs/VERIFY.md).
+      id-token: write
+      attestations: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -323,14 +328,46 @@ jobs:
           KEY="$RUNNER_TEMP/update.key"
           (umask 077 && printf '%s\n' "$MINISIGN_SECRET_KEY" > "$KEY")
           cd dist
-          for f in getcraft-*; do
+          for f in getcraft-* SHA256SUMS.txt; do
             minisign -S -s "$KEY" -m "$f"
             minisign -V -p "$GITHUB_WORKSPACE/keys/update-signing.pub" -m "$f" > /dev/null
           done
           rm -f "$KEY"
+      # Signed statements, stored by GitHub, that these files were built by this workflow run
+      # from this commit. Check with `gh attestation verify <file> --repo mbirnbach/getcraft`.
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            dist/getcraft-*.dmg
+            dist/getcraft-*.exe
+            dist/getcraft-*.zip
+            dist/getcraft-*.AppImage
+            dist/SHA256SUMS.txt
+      - name: Describe how this release was built
+        env:
+          MACOS_SIGNED: ${{ needs.macos.outputs.signed }}
+          WINDOWS_SIGNED: ${{ needs.windows.outputs.signed }}
+        run: |
+          RUN_URL="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          if [ "$MACOS_SIGNED" = true ]; then MACOS="signed with Developer ID and notarized by Apple"; else MACOS="**not** signed or notarized (ad-hoc signature only)"; fi
+          if [ "$WINDOWS_SIGNED" = true ]; then WINDOWS="code-signed via SignPath"; else WINDOWS="**not** code-signed (Windows SmartScreen may warn)"; fi
+          {
+            echo "### Build provenance"
+            echo
+            echo "- Source commit: [\`$GITHUB_SHA\`]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/commit/$GITHUB_SHA)"
+            echo "- Built by: [Release workflow run #$GITHUB_RUN_NUMBER]($RUN_URL) ([\`release.yml\`]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/blob/$GITHUB_SHA/.github/workflows/release.yml))"
+            echo "- macOS: $MACOS"
+            echo "- Windows: $WINDOWS"
+            echo "- Every download (\`getcraft-*\`) and \`SHA256SUMS.txt\` is signed with GetCraft's update key (\`.minisig\` files) and has a GitHub build provenance attestation"
+            echo
+            echo "How to check all of this yourself: [docs/VERIFY.md]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/blob/$GITHUB_SHA/docs/VERIFY.md)"
+            echo
+          } > "$RUNNER_TEMP/notes.md"
+          cat "$RUNNER_TEMP/notes.md" >> "$GITHUB_STEP_SUMMARY"
       - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           files: dist/*
+          body_path: ${{ runner.temp }}/notes.md
           generate_release_notes: true
           # Without a notarized macOS build it stays a pre-release, which the self-updater ignores.
           prerelease: ${{ needs.macos.outputs.signed != 'true' || contains(github.ref_name, '-') }}
