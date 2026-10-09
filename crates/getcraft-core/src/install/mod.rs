@@ -1,5 +1,7 @@
 //! Installs, removes, finds and launches tools. Every installer works without admin rights and
-//! swaps the new version into place only once it's fully unpacked.
+//! swaps the new version into place only once it's fully unpacked. The one exception is a
+//! Windows copy installed with the app's own `.msi`: that one is updated and removed by Windows
+//! Installer, which asks the user for admin rights.
 
 // Used by the Windows installer and self-updater; tested on every platform.
 #[cfg_attr(not(windows), allow(dead_code))]
@@ -13,7 +15,7 @@ mod windows;
 
 use crate::assets::PackageKind;
 use crate::catalog::Tool;
-use crate::state::Paths;
+use crate::state::{InstallRecord, Paths};
 use crate::{Error, Result};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -21,14 +23,24 @@ use std::path::{Path, PathBuf};
 pub struct Installer {
     /// Where tools are installed.
     pub apps_dir: PathBuf,
-    // Only the macOS installer needs scratch space (for mounting disk images) and scans
-    // system-wide folders for hand-installed apps.
-    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+    /// Scratch space: disk image mount points on macOS, installer logs on Windows.
+    #[cfg_attr(target_os = "linux", allow(dead_code))]
     work_dir: PathBuf,
-    /// Whether to look for hand-installed copies outside `apps_dir` (e.g. `/Applications`).
-    /// Off for custom/test directories so they never see, or touch, the real system.
-    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+    /// Whether to look for hand-installed copies outside `apps_dir` (`/Applications` on macOS,
+    /// copies installed with the apps' own `.msi` on Windows). Off for custom/test directories
+    /// so they never see, or touch, the real system.
+    #[cfg_attr(target_os = "linux", allow(dead_code))]
     scan_system_dirs: bool,
+}
+
+/// A copy of a tool that was installed without GetCraft.
+#[derive(Debug)]
+pub struct Existing {
+    /// What gets launched.
+    pub path: PathBuf,
+    pub version: String,
+    /// Installed with the app's own Windows Installer package (see [`InstallRecord::msi`]).
+    pub msi: bool,
 }
 
 impl Installer {
@@ -44,6 +56,7 @@ impl Installer {
     /// Installs `tool` from a downloaded package and returns its launch path. An update
     /// (`previous` is the current launch path) replaces the existing copy where it is, so
     /// nothing else on disk is ever moved or removed. `icon` is a PNG for Linux menu entries.
+    /// An [`PackageKind::Msi`] only updates a copy installed with the app's own `.msi`.
     #[allow(unused_variables)]
     pub fn install(
         &self,
@@ -64,6 +77,13 @@ impl Installer {
             }
             #[cfg(windows)]
             PackageKind::PortableZip => windows::install_zip(package, &self.apps_dir, tool),
+            #[cfg(windows)]
+            PackageKind::Msi => match previous {
+                Some(previous) if self.scan_system_dirs => {
+                    windows::install_msi(package, tool, previous, &self.work_dir)
+                }
+                _ => Err(Error::Install("the Windows installer package only updates an installed copy".into())),
+            },
             #[cfg(target_os = "linux")]
             PackageKind::AppImage => linux::install_appimage(package, &self.apps_dir, tool, icon),
             #[allow(unreachable_patterns)]
@@ -72,35 +92,52 @@ impl Installer {
     }
 
     #[allow(unused_variables)]
-    pub fn uninstall(&self, tool: &Tool, path: &Path) -> Result<()> {
+    pub fn uninstall(&self, tool: &Tool, record: &InstallRecord) -> Result<()> {
+        let path = record.path.as_path();
         #[cfg(target_os = "macos")]
         return match crate::trust::mac_identity(&tool.id, &tool.repo) {
             Some(identity) => macos::uninstall(path, &identity.bundle_id),
             None => Err(Error::Install(format!("{} isn't from a trusted publisher", tool.name))),
         };
         #[cfg(windows)]
-        return windows::uninstall(tool, path);
+        return match record.msi {
+            true if self.scan_system_dirs => windows::uninstall_msi(tool, path, &self.work_dir),
+            true => Err(Error::Install("not removing a copy outside the apps folder".into())),
+            false => windows::uninstall(tool, path),
+        };
         #[cfg(target_os = "linux")]
         return linux::uninstall(tool, path);
         #[allow(unreachable_code)]
         Err(Error::Install("unsupported platform".into()))
     }
 
-    /// The version actually on disk, where the platform records one (macOS bundles do).
+    /// The version actually installed, where the platform records one (macOS bundles and
+    /// Windows Installer packages do).
     #[allow(unused_variables)]
-    pub fn installed_version(&self, path: &Path) -> Option<String> {
+    pub fn installed_version(&self, tool: &Tool, record: &InstallRecord) -> Option<String> {
         #[cfg(target_os = "macos")]
-        return macos::bundle_version(path);
+        return macos::bundle_version(&record.path);
+        #[cfg(windows)]
+        return record.msi.then(|| windows::msi_at(tool, &record.path)).flatten().map(|m| m.version);
         #[allow(unreachable_code)]
         None
     }
 
-    /// Finds a copy of `tool` that was installed without GetCraft, returning its launch path
-    /// and version.
+    /// Finds a copy of `tool` that was installed without GetCraft.
     #[allow(unused_variables)]
-    pub fn find_existing(&self, tool: &Tool) -> Option<(PathBuf, String)> {
+    pub fn find_existing(&self, tool: &Tool) -> Option<Existing> {
         #[cfg(target_os = "macos")]
-        return macos::find_existing(tool, &self.apps_dir, self.scan_system_dirs);
+        return macos::find_existing(tool, &self.apps_dir, self.scan_system_dirs).map(|(path, version)| Existing {
+            path,
+            version,
+            msi: false,
+        });
+        #[cfg(windows)]
+        return self.scan_system_dirs.then(|| windows::find_msi(tool)).flatten().map(|m| Existing {
+            path: m.exe,
+            version: m.version,
+            msi: true,
+        });
         #[allow(unreachable_code)]
         None
     }

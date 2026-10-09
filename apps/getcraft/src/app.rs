@@ -791,8 +791,12 @@ fn card_actions(ui: &mut Ui, entry: &ToolEntry, snap: &Snapshot, actions: &mut V
                 ui.add(egui::Spinner::new());
             }
             None => match (&entry.installed, &entry.latest) {
-                (Some(_), _) if entry.update_available() => {
-                    if ui.add(theme::primary("Update")).clicked() {
+                (Some(installed), _) if entry.update_available() => {
+                    let mut update = ui.add(theme::primary("Update"));
+                    if installed.msi {
+                        update = update.on_hover_text(MSI_PERMISSION);
+                    }
+                    if update.clicked() {
                         actions.push(Action::Install(id.clone()));
                     }
                     if ui.add(theme::pill("Open")).clicked() {
@@ -856,6 +860,17 @@ fn more_menu(ui: &mut Ui, entry: &ToolEntry, actions: &mut Vec<Action>) {
                     actions.push(Action::SetPolicy(id.clone(), Some(p)));
                 }
             }
+            if installed.msi {
+                ui.label(
+                    RichText::new(format!(
+                        "{} was installed for all users with its own installer. Updates need your permission, \
+                         so GetCraft tells you about them instead of installing them automatically.",
+                        entry.tool.name
+                    ))
+                    .small()
+                    .color(FAINT),
+                );
+            }
             ui.separator();
             if ui.button(RichText::new("Uninstall…").color(DANGER)).clicked() {
                 actions.push(Action::AskUninstall(id.clone()));
@@ -863,6 +878,11 @@ fn more_menu(ui: &mut Ui, entry: &ToolEntry, actions: &mut Vec<Action>) {
         }
     });
 }
+
+/// Shown for apps installed with their own `.msi`, which GetCraft updates and removes by running
+/// Windows Installer.
+const MSI_PERMISSION: &str =
+    "This runs the app's own Windows installer, so Windows will ask for permission (it was installed for all users).";
 
 // ------------------------------------------------------------------------------------------------
 // Dialogs and toasts
@@ -909,7 +929,9 @@ impl GetCraftApp {
         }
 
         if let Some(id) = self.confirm_uninstall.clone() {
-            let name = snap.tools.iter().find(|t| t.tool.id == id).map_or(id.clone(), |t| t.tool.name.clone());
+            let entry = snap.tools.iter().find(|t| t.tool.id == id);
+            let name = entry.map_or(id.clone(), |t| t.tool.name.clone());
+            let msi = entry.and_then(|t| t.installed.as_ref()).is_some_and(|i| i.msi);
             let modal = egui::Modal::new(Id::new("confirm-uninstall")).show(ctx, |ui| {
                 ui.set_width(360.0);
                 ui.label(RichText::new(format!("Uninstall {name}?")).size(17.0).strong());
@@ -917,6 +939,9 @@ impl GetCraftApp {
                 ui.label(
                     RichText::new(format!("The app will be {where_to}. Your documents are not affected.")).color(MUTED),
                 );
+                if msi {
+                    ui.label(RichText::new(MSI_PERMISSION).color(MUTED));
+                }
                 ui.add_space(8.0);
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                     if ui.add(theme::primary("Uninstall").fill(DANGER)).clicked() {

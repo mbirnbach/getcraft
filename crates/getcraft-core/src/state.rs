@@ -78,6 +78,10 @@ pub struct InstallRecord {
     /// False when the tool was installed by hand and GetCraft merely found it.
     #[serde(default = "yes")]
     pub managed: bool,
+    /// Installed for all users with the app's own Windows Installer package. Updating or
+    /// removing it runs that installer, which asks for admin rights.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub msi: bool,
 }
 
 fn yes() -> bool {
@@ -182,6 +186,17 @@ mod tests {
                 path: "/Applications/PhotoCraft.app".into(),
                 installed_at: 1,
                 managed: true,
+                msi: false,
+            },
+        );
+        state.installed.insert(
+            "pdfcraft".into(),
+            InstallRecord {
+                version: "0.4.0".into(),
+                path: r"C:\Program Files\PdfCraft\pdfcraft.exe".into(),
+                installed_at: 1,
+                managed: false,
+                msi: true,
             },
         );
         state.save(&path).unwrap();
@@ -189,6 +204,8 @@ mod tests {
         assert_eq!(loaded.settings.policy_for("photocraft"), UpdatePolicy::Auto);
         assert_eq!(loaded.settings.policy_for("pdfcraft"), UpdatePolicy::Notify);
         assert_eq!(loaded.installed["photocraft"].version, "0.5.0");
+        assert!(!loaded.installed["photocraft"].msi);
+        assert!(loaded.installed["pdfcraft"].msi);
     }
 
     #[test]

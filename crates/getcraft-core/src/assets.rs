@@ -16,6 +16,9 @@ pub enum PackageKind {
     PortableZip,
     /// Linux AppImage (single self-contained executable).
     AppImage,
+    /// Windows Installer package. Only used to update a copy that was installed with it (it
+    /// installs for all users and needs admin rights); new installs use the portable zip.
+    Msi,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -46,6 +49,8 @@ fn kind_of(name: &str, toks: &[String]) -> Option<(PackageKind, Os)> {
         Some((PackageKind::AppImage, Os::Linux))
     } else if lower.ends_with(".zip") && toks.iter().any(|t| t == "windows" || t == "win" || t == "win64") {
         Some((PackageKind::PortableZip, Os::Windows))
+    } else if lower.ends_with(".msi") {
+        Some((PackageKind::Msi, Os::Windows))
     } else {
         None
     }
@@ -78,6 +83,15 @@ fn arch_score(toks: &[String], Platform { os, arch }: Platform) -> Option<u32> {
 
 /// Returns the best installable asset for `platform`, if any.
 pub fn select(assets: &[Asset], platform: Platform) -> Option<(&Asset, PackageKind)> {
+    best(assets, platform, |kind| kind != PackageKind::Msi)
+}
+
+/// Returns the best Windows Installer package for `platform`, if any.
+pub fn select_msi(assets: &[Asset], platform: Platform) -> Option<&Asset> {
+    best(assets, platform, |kind| kind == PackageKind::Msi).map(|(asset, _)| asset)
+}
+
+fn best(assets: &[Asset], platform: Platform, wanted: impl Fn(PackageKind) -> bool) -> Option<(&Asset, PackageKind)> {
     assets
         .iter()
         .filter_map(|asset| {
@@ -86,7 +100,7 @@ pub fn select(assets: &[Asset], platform: Platform) -> Option<(&Asset, PackageKi
                 return None;
             }
             let (kind, os) = kind_of(&asset.name, &toks)?;
-            if os != platform.os {
+            if os != platform.os || !wanted(kind) {
                 return None;
             }
             // On macOS a universal build is as good as native.
@@ -169,6 +183,17 @@ mod tests {
         assert_eq!(pick(&list, Os::Windows, Arch::X86), Some("photocraft-0.5.0-windows-x86-portable.zip"));
         assert_eq!(pick(&list, Os::Linux, Arch::X64), Some("photocraft-0.5.0-linux-x86_64.AppImage"));
         assert_eq!(pick(&list, Os::Linux, Arch::Arm64), Some("photocraft-0.5.0-linux-aarch64.AppImage"));
+    }
+
+    #[test]
+    fn picks_msi_only_when_asked() {
+        let list = photocraft();
+        let msi = |arch| select_msi(&list, Platform { os: Os::Windows, arch }).map(|a| a.name.as_str());
+        assert_eq!(msi(Arch::X64), Some("photocraft-0.5.0-windows-x64.msi"));
+        assert_eq!(msi(Arch::Arm64), Some("photocraft-0.5.0-windows-arm64.msi"));
+        assert_eq!(select_msi(&list, Platform { os: Os::MacOs, arch: Arch::Arm64 }), None);
+        let only_msi = assets(&["tool-1.0.0-windows-x64.msi"]);
+        assert_eq!(pick(&only_msi, Os::Windows, Arch::X64), None);
     }
 
     /// GetCraft's own release assets, which the self-updater has to find.

@@ -34,6 +34,8 @@ pub struct LatestRelease {
     pub checksums: Option<Asset>,
     /// Detached minisign signature of `package` (`<file>.minisig`); GetCraft's own releases have one.
     pub signature: Option<Asset>,
+    /// The Windows Installer package, for updating copies installed with one.
+    pub msi: Option<Asset>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -65,7 +67,10 @@ impl ToolEntry {
 
     pub fn update_available(&self) -> bool {
         match (&self.installed, &self.latest) {
-            (Some(i), Some(l)) => l.package.is_some() && version::is_newer(&l.version, &i.version),
+            (Some(i), Some(l)) => {
+                let installable = if i.msi { l.msi.is_some() } else { l.package.is_some() };
+                installable && version::is_newer(&l.version, &i.version)
+            }
             _ => false,
         }
     }
@@ -339,16 +344,17 @@ impl Engine {
             let current = match installed.get(&tool.id) {
                 Some(record) if record.path.exists() => {
                     let mut record = record.clone();
-                    if let Some(v) = self.inner.installer.installed_version(&record.path) {
+                    if let Some(v) = self.inner.installer.installed_version(tool, &record) {
                         record.version = v;
                     }
                     Some(record)
                 }
-                _ => self.inner.installer.find_existing(tool).map(|(path, version)| InstallRecord {
-                    version,
-                    path,
+                _ => self.inner.installer.find_existing(tool).map(|found| InstallRecord {
+                    version: found.version,
+                    path: found.path,
                     installed_at: now(),
                     managed: false,
+                    msi: found.msi,
                 }),
             };
             on_disk.insert(tool.id.clone(), current);
@@ -404,6 +410,7 @@ impl Engine {
             package,
             checksums: assets::checksum_file(&assets).cloned(),
             signature,
+            msi: self.inner.platform.and_then(|p| assets::select_msi(&assets, p)).cloned(),
             html_url: release.html_url,
             published_at: release.published_at,
             notes: release.body.unwrap_or_default(),
@@ -510,7 +517,12 @@ impl Engine {
             let settings = m.state.settings.clone();
             for entry in m.entries.iter().filter(|e| e.update_available() && e.job.is_none()) {
                 let version = entry.latest.as_ref().map(|l| l.version.clone()).unwrap_or_default();
-                match settings.policy_for(&entry.tool.id) {
+                let policy = match settings.policy_for(&entry.tool.id) {
+                    // Updating an MSI copy asks for admin rights, so it only happens on request.
+                    UpdatePolicy::Auto if entry.installed.as_ref().is_some_and(|i| i.msi) => UpdatePolicy::Notify,
+                    policy => policy,
+                };
+                match policy {
                     UpdatePolicy::Auto => {
                         let path = entry.installed.as_ref().map(|i| i.path.clone()).unwrap_or_default();
                         to_install.push((entry.tool.id.clone(), path));
@@ -619,7 +631,11 @@ impl Engine {
         previous: Option<&InstallRecord>,
         cancel: &AtomicBool,
     ) -> Result<InstallRecord> {
-        let (asset, kind) = latest.package.clone().ok_or_else(|| Error::Install("no build for this system".into()))?;
+        // A copy installed with the app's own `.msi` is updated with the new `.msi`.
+        let msi = previous.is_some_and(|p| p.msi);
+        let (asset, kind) =
+            if msi { latest.msi.clone().map(|a| (a, PackageKind::Msi)) } else { latest.package.clone() }
+                .ok_or_else(|| Error::Install("no build for this system".into()))?;
         if previous.is_some_and(|p| install::is_running(&p.path)) {
             return Err(Error::Install(format!("Quit {} to update it", tool.name)));
         }
@@ -643,7 +659,7 @@ impl Engine {
         let result = self.inner.installer.install(tool, &file, kind, previous_path, icon.as_deref());
         let _ = fs::remove_file(&file);
         let path = result?;
-        Ok(InstallRecord { version: latest.version.clone(), path, installed_at: now(), managed: true })
+        Ok(InstallRecord { version: latest.version.clone(), path, installed_at: now(), managed: !msi, msi })
     }
 
     pub fn update_all(&self) {
@@ -678,7 +694,7 @@ impl Engine {
             let result = if install::is_running(&record.path) {
                 Err(Error::Install(format!("Quit {} before uninstalling it", tool.name)))
             } else {
-                this.inner.installer.uninstall(&tool, &record.path)
+                this.inner.installer.uninstall(&tool, &record)
             };
             let mut m = this.lock();
             let ok = result.is_ok();
