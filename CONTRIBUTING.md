@@ -42,7 +42,7 @@ options are in the [README](README.md#development).
 
 - Keep each pull request to one change, and describe what it fixes or adds and how you tested it.
 - CI (formatting, clippy, tests on macOS, Windows and Linux) and the security checks (dependency
-  must pass before merging. Pull requests are squash-merged.
+  advisories, CodeQL) must pass before merging. Pull requests are squash-merged.
 - Code that downloads, unpacks, installs or launches anything gets extra scrutiny: say what could
   go wrong and how your change prevents it, and add tests.
 - Match the style around you: small functions, comments that explain *why*, no `unsafe` unless
