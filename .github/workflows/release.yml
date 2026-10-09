@@ -155,7 +155,10 @@ jobs:
         shell: bash
         run: |
           echo "signed=$HAS_SIGNING" >> "$GITHUB_OUTPUT"
-          echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+          # From Cargo.toml (which check-version matched against the tag), so dry runs get a real
+          # version number too; the installer needs one.
+          VERSION=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
       - run: cargo build --release -p getcraft --target x86_64-pc-windows-msvc --target aarch64-pc-windows-msvc
 
       # One folder per architecture; both are signed in a single request (one approval).
@@ -168,6 +171,14 @@ jobs:
             Copy-Item "target/$($pair[1])/release/getcraft.exe" "$dir/GetCraft.exe"
             Copy-Item LICENSE-MIT, LICENSE-APACHE, NOTICE, ATTRIBUTION.md, assets/LICENSE-icon.txt $dir
           }
+
+      - name: Check the executables need no extra runtime
+        shell: pwsh
+        run: scripts/check-windows-deps.ps1 dist/x64/GetCraft.exe dist/arm64/GetCraft.exe
+
+      - name: Smoke-test the x64 build (the ARM64 build is tested natively in CI)
+        shell: pwsh
+        run: scripts/windows-smoke-test.ps1 dist/x64/GetCraft.exe
 
       - name: Upload the unsigned build for SignPath
         if: env.HAS_SIGNING == 'true'
@@ -204,10 +215,23 @@ jobs:
             Write-Host "$arch signed by $($sig.SignerCertificate.Subject)"
           }
 
+      - name: Build the installer
+        shell: pwsh
+        run: |
+          $iscc = Join-Path ${env:ProgramFiles(x86)} "Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { throw "Inno Setup isn't installed on this runner" }
+          & $iscc /Qp "/DAppVersion=$env:VERSION" "/DStage=$PWD\dist" packaging\windows\getcraft.iss
+          if ($LASTEXITCODE -ne 0) { throw "ISCC failed" }
+
+      - name: Test the installer (install, start, uninstall)
+        shell: pwsh
+        run: scripts/windows-installer-test.ps1 "dist/getcraft-$env:VERSION-windows-setup.exe"
+
       - name: Zip the portable builds
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force out | Out-Null
+          Move-Item "dist/getcraft-$env:VERSION-windows-setup.exe" out/
           foreach ($arch in "x64", "arm64") {
             Remove-Item -Recurse -Force "pkg" -ErrorAction SilentlyContinue
             New-Item -ItemType Directory -Force "pkg/GetCraft" | Out-Null
@@ -217,7 +241,9 @@ jobs:
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: windows
-          path: out/*.zip
+          path: |
+            out/*.zip
+            out/*-setup.exe
 
   linux:
     needs: check-version

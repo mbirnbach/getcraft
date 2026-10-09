@@ -40,3 +40,46 @@ jobs:
       - uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2
         with:
           command: check advisories
+
+  # Starts the real release build on each system and checks it opens its window, draws and quits
+  # cleanly (`--smoke-test`, no network). Catches "double-click and nothing happens" failures.
+  smoke:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            exe: target/release/getcraft.exe
+          - os: windows-11-arm
+            exe: target/release/getcraft.exe
+          - os: macos-latest
+            exe: target/release/getcraft
+          - os: ubuntu-latest
+            exe: target/release/getcraft
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@686976e191b89faba57d3206551f0f330d8cb249 # stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+      - name: Linux GUI dependencies and a virtual display
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev xvfb libxkbcommon-x11-0 mesa-vulkan-drivers libgl1-mesa-dri
+      - run: cargo build --release -p getcraft
+      - name: Check the executable needs no extra runtime
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: scripts/check-windows-deps.ps1 ${{ matrix.exe }}
+      - name: Smoke test (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: scripts/windows-smoke-test.ps1 ${{ matrix.exe }}
+      - name: Smoke test (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          ${{ matrix.exe }} --smoke-test
+          grep "smoke test passed" "$HOME/Library/Application Support/GetCraft/getcraft.log"
+      - name: Smoke test (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          xvfb-run -a ${{ matrix.exe }} --smoke-test
+          grep "smoke test passed" "$HOME/.config/GetCraft/getcraft.log"

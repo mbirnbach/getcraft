@@ -97,16 +97,20 @@ them, and about ArtCraft itself, at [getartcraft.com/apps](https://getartcraft.c
 
 Get the latest version from the [releases page](https://github.com/mbirnbach/getcraft/releases):
 
-| System | File |
-|---|---|
-| macOS 11+ (Apple silicon and Intel) | `getcraft-<version>-macos-universal.dmg` |
-| Windows 10/11 x64 | `getcraft-<version>-windows-x64-portable.zip` |
-| Windows 11 on ARM | `getcraft-<version>-windows-arm64-portable.zip` |
-| Linux x86_64 / ARM64 | `getcraft-<version>-linux-<arch>.AppImage` |
+| System | Download | Then |
+|---|---|---|
+| macOS 11+ (Apple silicon and Intel) | `getcraft-<version>-macos-universal.dmg` | Open it and drag GetCraft into Applications. |
+| Windows 10/11 (x64 and ARM) | `getcraft-<version>-windows-setup.exe` | Run it. It installs GetCraft for your user account (no admin rights needed), adds it to the Start menu and starts it. |
+| Linux x86_64 / ARM64 | `getcraft-<version>-linux-<arch>.AppImage` | Make it executable and run it. |
+
+Windows also has portable builds (`getcraft-<version>-windows-<x64|arm64>-portable.zip`) for
+people who'd rather not install anything: unpack the folder somewhere permanent and run
+`GetCraft.exe`. They update themselves like the installed version. Nothing extra needs to be
+installed for either; GetCraft has no runtime dependencies.
 
 > [!NOTE]
 > The macOS app is signed and notarized by Apple. The Windows build isn't code-signed, so
-> Windows SmartScreen may say *"Windows protected your PC"* the first time you open it: click
+> Windows SmartScreen may say *"Windows protected your PC"* when you run the setup: click
 > **More info → Run anyway**. GetCraft's own updates after that aren't affected, and they're
 > verified with GetCraft's update signature (see [How downloads are verified](#how-downloads-are-verified)).
 
@@ -115,7 +119,7 @@ Installed apps go to:
 | System | Location | Shows up in |
 |---|---|---|
 | macOS | `/Applications` (or `~/Applications` without admin rights) | Launchpad and Spotlight |
-| Windows | `%LOCALAPPDATA%\Programs\GetCraft\<app>` (portable build) | Start menu |
+| Windows | `%LOCALAPPDATA%\Programs\GetCraft\<app>` | Start menu |
 | Linux | `~/.local/share/getcraft/apps/<app>` (AppImage) | Application menu |
 
 The first time it runs, GetCraft asks whether it may start when you log in. It never changes
@@ -126,17 +130,30 @@ your login items without asking, and the choice can be changed in Settings.
 Apps installed with GetCraft stay installed when you remove GetCraft. To remove one, use its
 ••• menu → *Uninstall* first (on macOS it goes to the Trash).
 
+**Windows (installed with the setup):** *Settings → Apps → Installed apps → GetCraft →
+Uninstall*. This also stops GetCraft and removes its login item.
+
+**Everywhere else:**
+
 1. Open GetCraft's Settings and turn off *Start GetCraft when I log in*.
 2. Quit GetCraft from the menu bar (macOS) or system tray (Windows, Linux): *Quit GetCraft*.
-3. Delete GetCraft itself: `GetCraft.app` on macOS, the `GetCraft` folder you unpacked on
-   Windows, or the `.AppImage` on Linux.
-4. Optionally delete its settings and cache:
+3. Delete GetCraft itself: `GetCraft.app` on macOS, the `GetCraft` folder you unpacked
+   (portable Windows build), or the `.AppImage` on Linux.
+
+Then, optionally, delete its settings, log and cache:
 
 | System | Folders |
 |---|---|
 | macOS | `~/Library/Application Support/GetCraft`, `~/Library/Caches/GetCraft` |
 | Windows | `%APPDATA%\GetCraft`, `%LOCALAPPDATA%\GetCraft` |
 | Linux | `~/.config/GetCraft`, `~/.cache/GetCraft` |
+
+### If GetCraft doesn't start
+
+GetCraft shows a message when something stops it from starting, and writes a log of every run:
+`getcraft.log` in `~/Library/Application Support/GetCraft` (macOS), `%APPDATA%\GetCraft`
+(Windows) or `~/.config/GetCraft` (Linux). Please attach it to a
+[bug report](https://github.com/mbirnbach/getcraft/issues/new?template=bug_report.yml).
 
 ## How it works
 

@@ -49,5 +49,5 @@ body:
     attributes:
       label: Error message or log
       description: |
-        Any error GetCraft showed. For a log, start GetCraft from a terminal with `RUST_LOG=debug`. Please remove anything private (like your user name in file paths).
+        Any error GetCraft showed, and the contents of `getcraft.log` (macOS: `~/Library/Application Support/GetCraft`, Windows: `%APPDATA%\GetCraft`, Linux: `~/.config/GetCraft`). Please remove anything private, like your user name in file paths.
       render: text

@@ -83,7 +83,9 @@ impl Location {
 
     /// Replaces the installation with `package` and returns what to launch afterwards. The
     /// running process keeps working (its files stay alive until it exits).
-    pub fn apply(&self, package: &Path, work_dir: &Path) -> Result<PathBuf> {
+    /// `version` is the version being installed; on Windows it's shown in Settings → Apps.
+    #[allow(unused_variables)]
+    pub fn apply(&self, package: &Path, work_dir: &Path, version: &str) -> Result<PathBuf> {
         match self {
             #[cfg(target_os = "macos")]
             Location::MacApp(app) => {
@@ -92,7 +94,11 @@ impl Location {
                 crate::install::macos::install_dmg(package, dir, work_dir, &crate::trust::getcraft_identity())
             }
             #[cfg(windows)]
-            Location::WindowsDir(dir) => apply_windows(package, dir, work_dir),
+            Location::WindowsDir(dir) => {
+                let exe = apply_windows(package, dir, work_dir)?;
+                set_installed_version(version);
+                Ok(exe)
+            }
             Location::AppImage(file) => {
                 let staged = file.with_extension("getcraft-new");
                 fs::copy(package, &staged)?;
@@ -154,6 +160,28 @@ fn apply_windows(zip_path: &Path, dir: &Path, work_dir: &Path) -> Result<PathBuf
     }
     let _ = crate::install::remove_path(&staged);
     Ok(dir.join("GetCraft.exe"))
+}
+
+/// The uninstall entry the Windows installer creates (see packaging/windows/getcraft.iss).
+#[cfg(windows)]
+const UNINSTALL_KEY: &str =
+    r"HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\{7CF358B6-E104-44DA-AC2E-E883DB1AA9F1}_is1";
+
+/// Keeps the version in Settings → Apps current after a self-update. Only touches the entry if
+/// GetCraft was installed with the installer (portable copies have none).
+#[cfg(windows)]
+fn set_installed_version(version: &str) {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    let reg = |args: &[&str]| {
+        Command::new("reg").args(args).creation_flags(CREATE_NO_WINDOW).output().is_ok_and(|o| o.status.success())
+    };
+    if reg(&["query", UNINSTALL_KEY]) {
+        let ok = reg(&["add", UNINSTALL_KEY, "/v", "DisplayVersion", "/t", "REG_SZ", "/d", version, "/f"]);
+        if !ok {
+            log::warn!("could not update the installed version in Settings → Apps");
+        }
+    }
 }
 
 /// Starts the updated GetCraft once this process has exited; the caller should exit right away.

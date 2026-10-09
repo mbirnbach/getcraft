@@ -30,7 +30,7 @@ app's ••• menu (*Don't check*).
 
 | What | macOS | Windows | Linux |
 |---|---|---|---|
-| Settings and the list of installed apps (`state.json`) | `~/Library/Application Support/GetCraft` | `%APPDATA%\GetCraft` | `~/.config/GetCraft` |
+| Settings, the list of installed apps (`state.json`) and a log of the last two runs (`getcraft.log`, `getcraft.old.log`) | `~/Library/Application Support/GetCraft` | `%APPDATA%\GetCraft` | `~/.config/GetCraft` |
 | Download cache and the release index cache | `~/Library/Caches/GetCraft` | `%LOCALAPPDATA%\GetCraft` | `~/.cache/GetCraft` |
 | Login item, only if you turned on *Start GetCraft when I log in* | `~/Library/LaunchAgents/net.brnbch.getcraft.plist` | `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` (value `GetCraft`) | `~/.config/autostart/GetCraft.desktop` |
 
