@@ -32,7 +32,7 @@
   <a href="#how-it-works">How it works</a> ·
   <a href="#development">Development</a> ·
   <a href="#privacy">Privacy</a> ·
-  <a href="#code-signing-policy">Code signing</a> ·
+  <a href="#how-downloads-are-verified">Security</a> ·
   <a href="#license-and-credits">License and credits</a>
 </p>
 
@@ -104,10 +104,10 @@ Get the latest version from the [releases page](https://github.com/mbirnbach/get
 | Linux x86_64 / ARM64 | `getcraft-<version>-linux-<arch>.AppImage` |
 
 > [!NOTE]
-> The macOS app is signed and notarized by Apple. The Windows build isn't code-signed yet, so
+> The macOS app is signed and notarized by Apple. The Windows build isn't code-signed, so
 > Windows SmartScreen may say *"Windows protected your PC"* the first time you open it: click
-> **More info → Run anyway**. GetCraft's own updates after that aren't affected. Signed Windows
-> builds are on their way (see [Code signing policy](#code-signing-policy)).
+> **More info → Run anyway**. GetCraft's own updates after that aren't affected, and they're
+> verified with GetCraft's update signature (see [How downloads are verified](#how-downloads-are-verified)).
 
 Installed apps go to:
 
@@ -182,15 +182,34 @@ GetCraft has no accounts, analytics or telemetry. It only connects to GitHub, to
 versions and to download the apps you choose. The [privacy policy](PRIVACY.md) lists every
 address it contacts and everything it stores on your computer.
 
+## How downloads are verified
+
+GetCraft installs and updates programs, so it checks everything it downloads before using it:
+
+- **Only known publishers.** Which GitHub owners GetCraft installs from is built into the app
+  (today: the ArtCraft team's `storytold`), and every file must come from that app's own GitHub
+  releases. The release index and catalog GetCraft downloads can describe apps, but can't point
+  it anywhere else.
+- **Checksums.** Every download must match the SHA-256 checksum and the exact size published in
+  the app's release, or it's thrown away.
+- **Apple signatures on macOS.** Before an app replaces anything, macOS has to confirm it's signed
+  by its publisher's Apple Developer team for that exact app (the Crafting Apps: team
+  `DJ6XS33FX8`). Packages are unpacked with limits on size and file count, and files can't land
+  outside the app's folder.
+- **Signed GetCraft updates.** GetCraft only updates itself to builds signed with its own update
+  key ([minisign](https://jedisct1.github.io/minisign/); public key in
+  [`keys/update-signing.pub`](keys/update-signing.pub)), and on macOS also signed and notarized
+  with the maintainer's Developer ID.
+
 ## Code signing policy
 
-Free code signing for Windows is provided by [SignPath.io](https://about.signpath.io/), certificate
-by [SignPath Foundation](https://signpath.org/). macOS builds are signed with the maintainer's
-Apple Developer ID and notarized by Apple.
+macOS builds are signed with the maintainer's Apple Developer ID and notarized by Apple. Windows
+builds are not code-signed. All release files are additionally signed with GetCraft's update key,
+which the self-updater checks.
 
 Only binaries built from this repository by its GitHub Actions
-[release workflow](.github/workflows/release.yml) are signed, and every signing request is
-approved by hand.
+[release workflow](.github/workflows/release.yml), with all actions and build tools pinned to
+fixed versions, are signed.
 
 | Role | Members |
 |---|---|
@@ -199,7 +218,8 @@ approved by hand.
 | Approvers | [@mbirnbach](https://github.com/mbirnbach) |
 
 Privacy policy: see [PRIVACY.md](PRIVACY.md). GetCraft only transfers information to the GitHub
-services listed there, as needed to check for and download updates.
+services listed there, as needed to check for and download updates. To report a security problem,
+see [SECURITY.md](SECURITY.md).
 
 ## License and credits
 

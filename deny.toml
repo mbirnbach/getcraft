@@ -1,0 +1,9 @@
+# cargo-deny configuration, checked in CI (`cargo deny check advisories`).
+
+[advisories]
+# Known "unmaintained" notices (not vulnerabilities) deep inside GUI dependencies that have no
+# maintained replacement upstream yet. Any other advisory, and every vulnerability, fails CI.
+ignore = [
+    { id = "RUSTSEC-2024-0370", reason = "proc-macro-error: build-time only, via gtk 0.18, which tray-icon needs on Linux" },
+    { id = "RUSTSEC-2026-0192", reason = "ttf-parser: via winit's Wayland window decorations (sctk-adwaita); waiting on upstream" },
+]

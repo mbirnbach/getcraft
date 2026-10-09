@@ -3,7 +3,25 @@
 Releases are built by [`release.yml`](../.github/workflows/release.yml) when a `v*` tag is
 pushed. Signing switches on by itself once the secrets below exist. A release becomes a normal release
 as soon as macOS is signed and notarized; without that it's a pre-release, which GetCraft's
-self-updater ignores. Windows builds are released unsigned until SignPath is set up.
+self-updater ignores. Windows builds are released without code signing (SignPath Foundation
+declined the project for now, October 2026; the setup below is kept for a later application).
+
+## Update signing key (all platforms)
+
+GetCraft only installs updates of itself that are signed with its minisign key. Create the key
+once, on your own machine:
+
+```bash
+brew install minisign
+scripts/setup-update-signing.sh
+```
+
+It writes the public key to `keys/update-signing.pub` (commit it; it's compiled into GetCraft),
+stores the private key as the `MINISIGN_SECRET_KEY` repository secret, and leaves a copy in
+`~/.getcraft-signing/`. **Back that copy up** (e.g. in your password manager): without it, copies
+of GetCraft that are already installed can't verify future updates. The release workflow signs
+every release file with it, and refuses to publish without the key: a build without the public
+key could never verify a later update, so its users would be stuck on it.
 
 Run the workflow by hand (*Actions → Release → Run workflow*) for a dry run: it builds, signs and
 packages everything but publishes nothing.
@@ -37,7 +55,7 @@ holder.
 The workflow signs the app with the hardened runtime, notarizes and staples the app and the DMG,
 and checks the result with `spctl`.
 
-## Windows: SignPath Foundation
+## Windows: SignPath Foundation (not active)
 
 [SignPath Foundation](https://signpath.org/) signs open-source projects for free. The
 certificate is issued to "SignPath Foundation", and every release is approved by hand.

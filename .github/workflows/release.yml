@@ -41,7 +41,7 @@ jobs:
   check-version:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Tag matches Cargo.toml
         if: startsWith(github.ref, 'refs/tags/v')
         run: |
@@ -60,11 +60,11 @@ jobs:
     env:
       HAS_SIGNING: ${{ secrets.APPLE_CERTIFICATE_P12 != '' && secrets.APPLE_API_KEY != '' }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: dtolnay/rust-toolchain@686976e191b89faba57d3206551f0f330d8cb249 # stable
         with:
           targets: aarch64-apple-darwin, x86_64-apple-darwin
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
       - id: mode
         run: echo "signed=$HAS_SIGNING" >> "$GITHUB_OUTPUT"
       - run: scripts/bundle-macos.sh release
@@ -133,7 +133,7 @@ jobs:
           security delete-keychain "$RUNNER_TEMP/build.keychain-db" || true
           rm -f "$RUNNER_TEMP/AuthKey.p8"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: macos
           path: target/getcraft-*.dmg
@@ -146,11 +146,11 @@ jobs:
     env:
       HAS_SIGNING: ${{ secrets.SIGNPATH_API_TOKEN != '' && vars.SIGNPATH_ORGANIZATION_ID != '' }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: dtolnay/rust-toolchain@686976e191b89faba57d3206551f0f330d8cb249 # stable
         with:
           targets: x86_64-pc-windows-msvc, aarch64-pc-windows-msvc
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
       - id: mode
         shell: bash
         run: |
@@ -172,14 +172,14 @@ jobs:
       - name: Upload the unsigned build for SignPath
         if: env.HAS_SIGNING == 'true'
         id: unsigned
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: windows-unsigned
           path: dist/
 
       - name: Sign with SignPath (waits for manual approval)
         if: env.HAS_SIGNING == 'true'
-        uses: signpath/github-action-submit-signing-request@v3
+        uses: signpath/github-action-submit-signing-request@f6d04783b4569d051e0c80105fe66e82819d0092 # v3
         with:
           api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
           organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
@@ -214,7 +214,7 @@ jobs:
             Copy-Item "dist/$arch/*" "pkg/GetCraft/"
             Compress-Archive -Path pkg/GetCraft -DestinationPath "out/getcraft-$env:VERSION-windows-$arch-portable.zip"
           }
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: windows
           path: out/*.zip
@@ -230,9 +230,9 @@ jobs:
             arch: aarch64
     runs-on: ${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: dtolnay/rust-toolchain@686976e191b89faba57d3206551f0f330d8cb249 # stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
       - run: sudo apt-get update && sudo apt-get install -y libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev
       - run: cargo build --release -p getcraft
       - name: Build the AppImage
@@ -246,10 +246,21 @@ jobs:
           printf '%s\n' '[Desktop Entry]' 'Type=Application' 'Name=GetCraft' \
             'Comment=Install and update the Crafting Apps' 'Exec=getcraft' 'Icon=getcraft' \
             'Categories=Utility;' 'Terminal=false' > AppDir/getcraft.desktop
-          curl -fsSL -o appimagetool "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-${{ matrix.arch }}.AppImage"
+          # Pinned tool and runtime, checked against known hashes, so a changed upstream file can't
+          # end up inside our release.
+          case "${{ matrix.arch }}" in
+            x86_64)  TOOL_SHA=ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0
+                     RUNTIME_SHA=2fca8b443c92510f1483a883f60061ad09b46b978b2631c807cd873a47ec260d ;;
+            aarch64) TOOL_SHA=f0837e7448a0c1e4e650a93bb3e85802546e60654ef287576f46c71c126a9158
+                     RUNTIME_SHA=00cbdfcf917cc6c0ff6d3347d59e0ca1f7f45a6df1a428a0d6d8a78664d87444 ;;
+          esac
+          curl -fsSL -o appimagetool "https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-${{ matrix.arch }}.AppImage"
+          curl -fsSL -o runtime "https://github.com/AppImage/type2-runtime/releases/download/20251108/runtime-${{ matrix.arch }}"
+          echo "$TOOL_SHA  appimagetool" | sha256sum -c -
+          echo "$RUNTIME_SHA  runtime" | sha256sum -c -
           chmod +x appimagetool
-          ARCH=${{ matrix.arch }} ./appimagetool --appimage-extract-and-run AppDir "dist/getcraft-$VERSION-linux-${{ matrix.arch }}.AppImage"
-      - uses: actions/upload-artifact@v4
+          ARCH=${{ matrix.arch }} ./appimagetool --appimage-extract-and-run --runtime-file runtime AppDir "dist/getcraft-$VERSION-linux-${{ matrix.arch }}.AppImage"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: linux-${{ matrix.arch }}
           path: dist/*.AppImage
@@ -259,13 +270,39 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           path: dist
           pattern: "{macos,windows,linux-*}"
           merge-multiple: true
       - run: cd dist && sha256sum * > SHA256SUMS.txt
-      - uses: softprops/action-gh-release@v2
+      # Installed copies of GetCraft only update to builds signed with this key (minisign); the
+      # public half is compiled in from keys/update-signing.pub.
+      - name: Sign the builds for GetCraft's self-updater
+        env:
+          MINISIGN_SECRET_KEY: ${{ secrets.MINISIGN_SECRET_KEY }}
+        run: |
+          # A build without a real public key could never verify (and so never install) a later
+          # update, which would strand its users. Refuse to publish one.
+          if ! grep -q '^RW' keys/update-signing.pub; then
+            echo "::error::No update signing key in keys/update-signing.pub; run scripts/setup-update-signing.sh first"
+            exit 1
+          fi
+          if [ -z "$MINISIGN_SECRET_KEY" ]; then
+            echo "::error::The MINISIGN_SECRET_KEY secret is missing"
+            exit 1
+          fi
+          sudo apt-get install -y -qq minisign
+          KEY="$RUNNER_TEMP/update.key"
+          (umask 077 && printf '%s\n' "$MINISIGN_SECRET_KEY" > "$KEY")
+          cd dist
+          for f in getcraft-*; do
+            minisign -S -s "$KEY" -m "$f"
+            minisign -V -p "$GITHUB_WORKSPACE/keys/update-signing.pub" -m "$f" > /dev/null
+          done
+          rm -f "$KEY"
+      - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           files: dist/*
           generate_release_notes: true
