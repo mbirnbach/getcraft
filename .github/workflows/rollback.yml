@@ -1,0 +1,38 @@
+name: Rollback round trip
+
+# Installs PhotoCraft 0.3.0 into a temporary folder, updates it to 0.5.0 keeping 0.3.0, switches
+# back and forth and checks that a failed update restores everything. Uses real releases, so it
+# runs when the installer code changes and on demand; it isn't a required check.
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - crates/getcraft-core/src/install/**
+      - crates/getcraft-core/src/engine.rs
+      - crates/getcraft-core/examples/rollback.rs
+      - .github/workflows/rollback.yml
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  rollback:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@686976e191b89faba57d3206551f0f330d8cb249 # stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+      - name: Install system libraries
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev
+      - name: Keep, switch back and forth, restore after a failed update
+        run: cargo run -p getcraft-core --example rollback
+        env:
+          GETCRAFT_GITHUB_TOKEN: ${{ github.token }}

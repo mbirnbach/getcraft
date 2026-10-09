@@ -48,6 +48,7 @@ crates/getcraft-core/     everything UI-independent
   src/catalog.rs, state.rs, version.rs, platform.rs
   examples/smoke.rs       live end-to-end install into a temp folder
   examples/msi_roundtrip.rs  Windows: find, update and uninstall an MSI-installed app (CI only)
+  examples/rollback.rs    keep a previous version, switch back and forth (real releases, temp folder)
 catalog.toml              curated list of apps (names, descriptions, categories); also fetched remotely
 keys/update-signing.pub   minisign public key compiled into GetCraft (key ID B92D9E0E21D756AC)
 packaging/windows/getcraft.iss   Inno Setup installer script
@@ -96,6 +97,16 @@ Rust 2024 edition, workspace version in the root `Cargo.toml` (shared by all cra
     them. msiexec logs go to the work folder.
   - Linux: the AppImage into `~/.local/share/getcraft/apps/<id>` plus an escaped `.desktop` entry.
   - Apps are never updated while running (`install::is_running`).
+  - **Previous versions** (setting `keep_previous`, off by default): an update moves the
+    replaced bundle/folder to `Paths::previous_dir/<id>/` (`~/Library/Application Support/GetCraft/
+    Previous.noindex` on macOS so Spotlight skips it, the local data folder elsewhere; never the
+    roaming `%APPDATA%`). One kept copy per app; the one kept before is only dropped once the
+    update worked, and a failed update restores both. Recorded as `InstallRecord::previous`.
+    "Switch back" swaps the two (so it can be undone), re-checks the kept copy first (macOS:
+    `codesign` identity again; elsewhere `<id>.exe`/`<id>.AppImage` present) and sets
+    `rolled_back_from`, so that version isn't offered again (later releases are). MSI copies never
+    keep one (Windows Installer refuses downgrades). Turning the setting off or uninstalling
+    deletes the kept copies. Cross-volume moves fall back to copying (`ditto` on macOS).
 - **Update policies per app:** notify (default), automatic, or off. Checks at start and every
   6 hours (configurable). Desktop notifications for: update available, app updated, automatic
   update failed, GetCraft updated, GetCraft self-update failed (once per version).
@@ -133,6 +144,7 @@ cargo test --workspace                 # unit tests (trust, archive, assets, sel
 cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all
 cargo run -p getcraft-core --example smoke pdfcraft   # real install into a TEMP folder
+cargo run -p getcraft-core --example rollback         # keep/switch previous versions, TEMP folder
 ./target/release/getcraft --smoke-test                # startup test
 scripts/bundle-macos.sh debug          # target/bundle/GetCraft.app (ad-hoc sign it to run:
                                        # codesign -s - --force target/bundle/GetCraft.app)
@@ -154,7 +166,8 @@ hands off to the installed GetCraft if it's running (single instance), so stop o
   Windows ARM64 `windows-11-arm`, macOS, Linux under Xvfb), `security.yml` (`cargo-deny`
   advisories on every change and weekly; CodeQL for Rust and Actions), `index.yml` (release
   index), `msi.yml` (Windows MSI round trip with a real PhotoCraft MSI, on installer changes,
-  not required), `release.yml` (on `v*` tags; manual runs are dry runs that publish nothing).
+  not required), `rollback.yml` (the `rollback` example on all three systems, same triggers, not
+  required), `release.yml` (on `v*` tags; manual runs are dry runs that publish nothing).
 - **All actions are pinned to commit SHAs** (comment shows the version); Dependabot updates them
   weekly. `appimagetool` 1.9.1 and the AppImage runtime 20251108 are pinned with SHA-256 hashes.
 - **Rulesets:** `main` requires a PR, squash merge, resolved threads and 8 checks
@@ -187,6 +200,8 @@ hands off to the installed GetCraft if it's running (single instance), so stop o
 
 ## Things learned the hard way
 
+- **Never add files to a macOS `.app`**, not even in its root: codesign then reports "unsealed
+  contents" and the signature check fails. Tests tell bundles apart by their version instead.
 - **winit owns the macOS app delegate** and aborts if it's replaced. Reopen handling (Dock click
   → show window) adds one method to winit's delegate class at runtime (`class_addMethod` in
   `background.rs`).
