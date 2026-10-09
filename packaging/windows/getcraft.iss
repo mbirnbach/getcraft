@@ -75,8 +75,9 @@ Source: "{#Stage}\x64\ATTRIBUTION.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#Stage}\x64\LICENSE-icon.txt"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-Name: "{autoprograms}\GetCraft"; Filename: "{app}\GetCraft.exe"
-Name: "{autodesktop}\GetCraft"; Filename: "{app}\GetCraft.exe"; Tasks: desktopicon
+; The app ID lets Windows show GetCraft's notifications under its own name and icon.
+Name: "{autoprograms}\GetCraft"; Filename: "{app}\GetCraft.exe"; AppUserModelID: "net.brnbch.getcraft"
+Name: "{autodesktop}\GetCraft"; Filename: "{app}\GetCraft.exe"; AppUserModelID: "net.brnbch.getcraft"; Tasks: desktopicon
 
 [Run]
 Filename: "{app}\GetCraft.exe"; Description: "{cm:LaunchProgram,GetCraft}"; Flags: nowait postinstall skipifsilent
