@@ -1702,7 +1702,7 @@ dependencies = [
 
 [[package]]
 name = "getcraft"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "auto-launch",
  "eframe",
@@ -1725,7 +1725,7 @@ dependencies = [
 
 [[package]]
 name = "getcraft-core"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "dirs 7.0.0",
  "hex",
@@ -1750,7 +1750,7 @@ dependencies = [
 
 [[package]]
 name = "getcraft-index"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "getcraft-core",
  "serde_json",
