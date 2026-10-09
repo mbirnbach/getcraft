@@ -891,7 +891,7 @@ fn more_menu(ui: &mut Ui, entry: &ToolEntry, actions: &mut Vec<Action>) {
             }
             if let Some(left) = &installed.rolled_back_from {
                 ui.label(
-                    RichText::new(format!("You switched back from {left}, so it isn't offered as an update."))
+                    RichText::new(format!("You switched back from {left}, so it won't be installed automatically."))
                         .small()
                         .color(FAINT),
                 );

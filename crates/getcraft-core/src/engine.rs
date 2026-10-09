@@ -74,9 +74,7 @@ impl ToolEntry {
         match (&self.installed, &self.latest) {
             (Some(i), Some(l)) => {
                 let installable = if i.msi { l.msi.is_some() } else { l.package.is_some() };
-                // The version the user switched back from isn't offered again.
-                let left = i.rolled_back_from.as_deref() == Some(l.version.as_str());
-                installable && !left && version::is_newer(&l.version, &i.version)
+                installable && version::is_newer(&l.version, &i.version)
             }
             _ => false,
         }
@@ -527,6 +525,12 @@ impl Engine {
             let settings = m.state.settings.clone();
             for entry in m.entries.iter().filter(|e| e.update_available() && e.job.is_none()) {
                 let version = entry.latest.as_ref().map(|l| l.version.clone()).unwrap_or_default();
+                // The version the user switched back from is shown as an update but only installed
+                // when they ask; a later release is handled as usual.
+                let left = entry.installed.as_ref().and_then(|i| i.rolled_back_from.as_deref());
+                if left == Some(version.as_str()) {
+                    continue;
+                }
                 let policy = match settings.policy_for(&entry.tool.id) {
                     // Updating an MSI copy asks for admin rights, so it only happens on request.
                     UpdatePolicy::Auto if entry.installed.as_ref().is_some_and(|i| i.msi) => UpdatePolicy::Notify,
@@ -938,10 +942,38 @@ mod tests {
     }
 
     #[test]
-    fn the_version_switched_back_from_is_not_offered_again() {
+    fn the_version_switched_back_from_is_still_shown_as_an_update() {
         assert!(entry("0.3.0", "0.5.0", None).update_available());
-        assert!(!entry("0.3.0", "0.5.0", Some("0.5.0")).update_available());
-        // A later release is offered as usual.
+        assert!(entry("0.3.0", "0.5.0", Some("0.5.0")).update_available());
         assert!(entry("0.3.0", "0.6.0", Some("0.5.0")).update_available());
+    }
+
+    #[test]
+    fn the_version_switched_back_from_is_neither_installed_nor_announced_automatically() {
+        let dir = tempfile::tempdir().unwrap();
+        let paths = Paths::in_dir(dir.path());
+        let installer = Installer::with_apps_dir(dir.path().join("Applications"), &paths);
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let seen = events.clone();
+        let engine = Engine::new(paths, installer, None, || {}, move |e| seen.lock().unwrap().push(format!("{e:?}")));
+        for policy in [UpdatePolicy::Notify, UpdatePolicy::Auto] {
+            {
+                let mut m = engine.lock();
+                m.state.settings.default_policy = policy;
+                m.entries = vec![entry("0.3.0", "0.5.0", Some("0.5.0"))];
+            }
+            engine.apply_policies();
+            assert!(events.lock().unwrap().is_empty(), "{policy:?}: no notification");
+            assert!(engine.lock().entries[0].job.is_none(), "{policy:?}: nothing installed");
+        }
+
+        // A later release is handled as usual.
+        {
+            let mut m = engine.lock();
+            m.state.settings.default_policy = UpdatePolicy::Notify;
+            m.entries = vec![entry("0.3.0", "0.6.0", Some("0.5.0"))];
+        }
+        engine.apply_policies();
+        assert_eq!(events.lock().unwrap().len(), 1, "{:?}", events.lock().unwrap());
     }
 }

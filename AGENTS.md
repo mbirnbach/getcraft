@@ -104,7 +104,8 @@ Rust 2024 edition, workspace version in the root `Cargo.toml` (shared by all cra
     update worked, and a failed update restores both. Recorded as `InstallRecord::previous`.
     "Switch back" swaps the two (so it can be undone), re-checks the kept copy first (macOS:
     `codesign` identity again; elsewhere `<id>.exe`/`<id>.AppImage` present) and sets
-    `rolled_back_from`, so that version isn't offered again (later releases are). MSI copies never
+    `rolled_back_from`: that version still shows as an update, but update policies skip it (no
+    automatic install, no notification); later releases are handled as usual. MSI copies never
     keep one (Windows Installer refuses downgrades). Turning the setting off or uninstalling
     deletes the kept copies. Cross-volume moves fall back to copying (`ditto` on macOS).
 - **Update policies per app:** notify (default), automatic, or off. Checks at start and every

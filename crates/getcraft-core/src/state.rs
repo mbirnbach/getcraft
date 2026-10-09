@@ -89,8 +89,8 @@ pub struct InstallRecord {
     /// The copy this one replaced, kept for switching back (see [`Settings::keep_previous`]).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub previous: Option<KeptVersion>,
-    /// Set after switching back to an older version: the newer one the user left, which isn't
-    /// offered as an update again (a later release is).
+    /// Set after switching back to an older version: the newer one the user left. It's still
+    /// shown as an update, but never installed or announced automatically (a later release is).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub rolled_back_from: Option<String>,
 }
