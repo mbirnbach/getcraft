@@ -23,6 +23,11 @@ of GetCraft that are already installed can't verify future updates. The release 
 every release file with it, and refuses to publish without the key: a build without the public
 key could never verify a later update, so its users would be stuck on it.
 
+Besides the release files, `SHA256SUMS.txt` is signed too. The workflow also creates a GitHub
+build provenance attestation for every release file (no setup needed) and writes the source
+commit, the workflow run and whether macOS and Windows were signed at the top of the release
+notes. How users check all of this is in [VERIFY.md](VERIFY.md).
+
 Run the workflow by hand (*Actions → Release → Run workflow*) for a dry run: it builds, signs and
 packages everything but publishes nothing.
 
@@ -56,6 +61,13 @@ The workflow signs the app with the hardened runtime, notarizes and staples the 
 and checks the result with `spctl`.
 
 ## Windows: SignPath Foundation (not active)
+
+**Status:** not operational. SignPath Foundation declined the project for now (October 2026).
+The signing steps only run once the `SIGNPATH_*` secret and variable below exist; until then
+Windows releases are published unsigned, and their release notes say so. The README and
+[VERIFY.md](VERIFY.md#windows-currently-not-code-signed) tell users how to check the download
+instead. The open step is a new application to SignPath Foundation (or another certificate,
+which would need workflow changes).
 
 [SignPath Foundation](https://signpath.org/) signs open-source projects for free. The
 certificate is issued to "SignPath Foundation", and every release is approved by hand.

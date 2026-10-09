@@ -32,15 +32,6 @@ jobs:
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo test --workspace
 
-  # Known vulnerabilities and other advisories in dependencies (configured in deny.toml).
-  advisories:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2
-        with:
-          command: check advisories
-
   # Starts the real release build on each system and checks it opens its window, draws and quits
   # cleanly (`--smoke-test`, no network). Catches "double-click and nothing happens" failures.
   smoke:

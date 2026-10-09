@@ -21,4 +21,10 @@ Only the latest release gets fixes. GetCraft updates itself, so that's what almo
 
 ## How GetCraft protects downloads
 
-See [How downloads are verified](README.md#how-downloads-are-verified) in the README.
+See [How downloads are verified](README.md#how-downloads-are-verified) in the README. To check a
+GetCraft download yourself (checksums, update signatures, build provenance, Apple signature), see
+[docs/VERIFY.md](docs/VERIFY.md).
+
+Dependencies are kept up to date by Dependabot and checked against the RustSec advisory database;
+the code and workflows are scanned with CodeQL ([security checks](.github/workflows/security.yml)).
+These catch known kinds of problems, not every possible one.

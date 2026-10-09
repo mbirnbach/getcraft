@@ -16,6 +16,7 @@
   <img alt="License: MIT OR Apache-2.0" src="https://img.shields.io/badge/license-MIT%20%2F%20Apache--2.0-3a3a3a?style=flat-square">
   <img alt="Status: early" src="https://img.shields.io/badge/status-early-d69e2e?style=flat-square">
   <a href="https://github.com/mbirnbach/getcraft/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/mbirnbach/getcraft/ci.yml?branch=main&style=flat-square&label=CI"></a>
+  <a href="https://github.com/mbirnbach/getcraft/actions/workflows/security.yml"><img alt="Security checks" src="https://img.shields.io/github/actions/workflow/status/mbirnbach/getcraft/security.yml?branch=main&style=flat-square&label=security%20checks"></a>
 </p>
 
 > [!IMPORTANT]
@@ -26,13 +27,14 @@
 > repository; problems with installing or updating belong [here](https://github.com/mbirnbach/getcraft/issues).
 
 <p align="center">
+  <a href="#security--trust">Security &amp; Trust</a> ·
   <a href="#features">Features</a> ·
   <a href="#supported-apps">Supported apps</a> ·
   <a href="#download">Download</a> ·
   <a href="#how-it-works">How it works</a> ·
   <a href="#development">Development</a> ·
   <a href="#privacy">Privacy</a> ·
-  <a href="#how-downloads-are-verified">Security</a> ·
+  <a href="#how-downloads-are-verified">Verification</a> ·
   <a href="#contributing">Contributing</a> ·
   <a href="#license-and-credits">License and credits</a>
 </p>
@@ -44,6 +46,36 @@
   <br>
   <sub>The catalog. Apps you already have, even ones installed by hand, show up under Installed.</sub>
 </p>
+
+## Security & Trust
+
+GetCraft installs and updates programs on your computer, so it has to be trustworthy. Rather than
+asking you to take that on faith, here is what it does and how you can check it yourself.
+
+- **Official sources only.** Apps are downloaded from their publishers' own GitHub releases. Which
+  publishers are allowed is fixed in GetCraft's code, not in data it downloads.
+- **Verified downloads.** Every download must match the published SHA-256 checksum and file size.
+  On macOS, the app must also be signed by its publisher's Apple Developer team.
+- **Signed self-updates.** GetCraft only updates itself to builds signed with its own
+  [minisign](https://jedisct1.github.io/minisign/) key.
+- **Signed macOS releases.** GetCraft for macOS is signed with a Developer ID and notarized by
+  Apple. **Windows builds are not code-signed yet**, so SmartScreen may warn; the
+  [verification guide](docs/VERIFY.md#windows-currently-not-code-signed) explains how to check the
+  download first.
+- **No tracking.** No accounts, analytics, telemetry, crash reporting or ads.
+- **Open and traceable.** The source is public, and releases are built only by a public
+  GitHub Actions workflow; each release can be traced to its commit and build run.
+
+**Check it yourself:**
+[Verification guide](docs/VERIFY.md) ·
+[Releases](https://github.com/mbirnbach/getcraft/releases) ·
+[Release workflow](.github/workflows/release.yml) ([runs](https://github.com/mbirnbach/getcraft/actions/workflows/release.yml)) ·
+[Security policy](SECURITY.md) ·
+[Privacy policy](PRIVACY.md)
+
+Details: [How downloads are verified](#how-downloads-are-verified) and
+[Code signing policy](#code-signing-policy). Automated checks (dependency advisories, CodeQL) catch
+known kinds of problems; they don't prove the absence of bugs.
 
 ## Features
 
@@ -109,10 +141,12 @@ people who'd rather not install anything: unpack the folder somewhere permanent 
 installed for either; GetCraft has no runtime dependencies.
 
 > [!NOTE]
-> The macOS app is signed and notarized by Apple. The Windows build isn't code-signed, so
-> Windows SmartScreen may say *"Windows protected your PC"* when you run the setup: click
-> **More info → Run anyway**. GetCraft's own updates after that aren't affected, and they're
-> verified with GetCraft's update signature (see [How downloads are verified](#how-downloads-are-verified)).
+> The macOS app is signed and notarized by Apple. The Windows build isn't code-signed yet, so
+> Windows SmartScreen may say *"Windows protected your PC"* when you run the setup. Before
+> choosing **More info → Run anyway**, check the download as described in
+> [Verifying GetCraft downloads](docs/VERIFY.md#windows-currently-not-code-signed). GetCraft's own
+> updates after that don't depend on Windows code signing: they're verified with GetCraft's update
+> signature (see [How downloads are verified](#how-downloads-are-verified)).
 
 Installed apps go to:
 
@@ -216,14 +250,19 @@ GetCraft installs and updates programs, so it checks everything it downloads bef
   outside the app's folder.
 - **Signed GetCraft updates.** GetCraft only updates itself to builds signed with its own update
   key ([minisign](https://jedisct1.github.io/minisign/); public key in
-  [`keys/update-signing.pub`](keys/update-signing.pub)), and on macOS also signed and notarized
-  with the maintainer's Developer ID.
+  [`keys/update-signing.pub`](keys/update-signing.pub)), and on macOS also signed with the
+  maintainer's Developer ID (team `J829HHBMPW`).
+
+To check GetCraft's own downloads by hand (checksums, signatures, build provenance), see
+[Verifying GetCraft downloads](docs/VERIFY.md).
 
 ## Code signing policy
 
 macOS builds are signed with the maintainer's Apple Developer ID and notarized by Apple. Windows
-builds are not code-signed. All release files are additionally signed with GetCraft's update key,
-which the self-updater checks.
+builds are not code-signed: SignPath Foundation declined the project for now (see
+[docs/SIGNING.md](docs/SIGNING.md)). All release files are additionally signed with GetCraft's
+update key, which the self-updater checks. From the release after 0.1.3 on, they also have GitHub
+build provenance attestations linking them to the workflow run and commit that built them.
 
 Only binaries built from this repository by its GitHub Actions
 [release workflow](.github/workflows/release.yml), with all actions and build tools pinned to
