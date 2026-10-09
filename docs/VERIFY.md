@@ -176,12 +176,12 @@ What that means for you:
 
 - Windows SmartScreen may show *"Windows protected your PC"* when you run the setup, and the
   file's properties show no digital signature. That warning means Windows can't tell who made
-  the file; it isn't a finding about the file.
-- Please don't just click past it. First check the download: the
+  the file; it isn't a finding about the file. Choose **More info → Run anyway** to continue.
+- If you'd like to be sure your download is genuine first, check the
   [checksum](#checksums-all-platforms) (catches damaged files), and the
   [minisign signature](#update-signatures-minisign) or
   [attestation](#build-provenance-github-attestations) (show it was built and signed by
-  GetCraft's release process). Only if those pass, choose **More info → Run anyway**.
+  GetCraft's release process).
 - Once installed, GetCraft's own updates don't rely on Windows code signing: each one must match
   its checksum and carry a valid minisign signature, or it isn't installed.
 

@@ -27,14 +27,13 @@
 > repository; problems with installing or updating belong [here](https://github.com/mbirnbach/getcraft/issues).
 
 <p align="center">
-  <a href="#security--trust">Security &amp; Trust</a> ·
   <a href="#features">Features</a> ·
   <a href="#supported-apps">Supported apps</a> ·
   <a href="#download">Download</a> ·
   <a href="#how-it-works">How it works</a> ·
   <a href="#development">Development</a> ·
   <a href="#privacy">Privacy</a> ·
-  <a href="#how-downloads-are-verified">Verification</a> ·
+  <a href="#security--trust">Security &amp; Trust</a> ·
   <a href="#contributing">Contributing</a> ·
   <a href="#license-and-credits">License and credits</a>
 </p>
@@ -46,36 +45,6 @@
   <br>
   <sub>The catalog. Apps you already have, even ones installed by hand, show up under Installed.</sub>
 </p>
-
-## Security & Trust
-
-GetCraft installs and updates programs on your computer, so it has to be trustworthy. Rather than
-asking you to take that on faith, here is what it does and how you can check it yourself.
-
-- **Official sources only.** Apps are downloaded from their publishers' own GitHub releases. Which
-  publishers are allowed is fixed in GetCraft's code, not in data it downloads.
-- **Verified downloads.** Every download must match the published SHA-256 checksum and file size.
-  On macOS, the app must also be signed by its publisher's Apple Developer team.
-- **Signed self-updates.** GetCraft only updates itself to builds signed with its own
-  [minisign](https://jedisct1.github.io/minisign/) key.
-- **Signed macOS releases.** GetCraft for macOS is signed with a Developer ID and notarized by
-  Apple. **Windows builds are not code-signed yet**, so SmartScreen may warn; the
-  [verification guide](docs/VERIFY.md#windows-currently-not-code-signed) explains how to check the
-  download first.
-- **No tracking.** No accounts, analytics, telemetry, crash reporting or ads.
-- **Open and traceable.** The source is public, and releases are built only by a public
-  GitHub Actions workflow; each release can be traced to its commit and build run.
-
-**Check it yourself:**
-[Verification guide](docs/VERIFY.md) ·
-[Releases](https://github.com/mbirnbach/getcraft/releases) ·
-[Release workflow](.github/workflows/release.yml) ([runs](https://github.com/mbirnbach/getcraft/actions/workflows/release.yml)) ·
-[Security policy](SECURITY.md) ·
-[Privacy policy](PRIVACY.md)
-
-Details: [How downloads are verified](#how-downloads-are-verified) and
-[Code signing policy](#code-signing-policy). Automated checks (dependency advisories, CodeQL) catch
-known kinds of problems; they don't prove the absence of bugs.
 
 ## Features
 
@@ -142,11 +111,11 @@ installed for either; GetCraft has no runtime dependencies.
 
 > [!NOTE]
 > The macOS app is signed and notarized by Apple. The Windows build isn't code-signed yet, so
-> Windows SmartScreen may say *"Windows protected your PC"* when you run the setup. Before
-> choosing **More info → Run anyway**, check the download as described in
-> [Verifying GetCraft downloads](docs/VERIFY.md#windows-currently-not-code-signed). GetCraft's own
-> updates after that don't depend on Windows code signing: they're verified with GetCraft's update
-> signature (see [How downloads are verified](#how-downloads-are-verified)).
+> Windows SmartScreen may say *"Windows protected your PC"* when you run the setup: choose
+> **More info → Run anyway**. The warning only means the file has no code signature. If you'd like
+> to make sure your download is genuine first, the
+> [verification guide](docs/VERIFY.md#windows-currently-not-code-signed) shows how. GetCraft's own
+> updates after that are checked with its update signature (see [Security & Trust](#security--trust)).
 
 Installed apps go to:
 
@@ -234,27 +203,41 @@ GetCraft has no accounts, analytics or telemetry. It only connects to GitHub, to
 versions and to download the apps you choose. The [privacy policy](PRIVACY.md) lists every
 address it contacts and everything it stores on your computer.
 
-## How downloads are verified
+## Security & Trust
 
-GetCraft installs and updates programs, so it checks everything it downloads before using it:
+<a id="how-downloads-are-verified"></a>
+GetCraft installs and updates programs on your computer, so it checks everything it downloads
+before using it, and you can check GetCraft itself too.
 
-- **Only known publishers.** Which GitHub owners GetCraft installs from is built into the app
+- **Official sources only.** Which publishers GetCraft installs from is built into the app
   (today: the ArtCraft team's `storytold`), and every file must come from that app's own GitHub
   releases. The release index and catalog GetCraft downloads can describe apps, but can't point
   it anywhere else.
-- **Checksums.** Every download must match the SHA-256 checksum and the exact size published in
-  the app's release, or it's thrown away.
+- **Verified downloads.** Every download must match the SHA-256 checksum and the exact size
+  published in the app's release, or it's thrown away. Packages are unpacked with limits on size
+  and file count, and files can't land outside the app's folder.
 - **Apple signatures on macOS.** Before an app replaces anything, macOS has to confirm it's signed
   by its publisher's Apple Developer team for that exact app (the Crafting Apps: team
-  `DJ6XS33FX8`). Packages are unpacked with limits on size and file count, and files can't land
-  outside the app's folder.
+  `DJ6XS33FX8`).
 - **Signed GetCraft updates.** GetCraft only updates itself to builds signed with its own update
   key ([minisign](https://jedisct1.github.io/minisign/); public key in
   [`keys/update-signing.pub`](keys/update-signing.pub)), and on macOS also signed with the
   maintainer's Developer ID (team `J829HHBMPW`).
+- **Signed macOS releases.** GetCraft for macOS is signed with a Developer ID and notarized by
+  Apple. Windows builds are not code-signed yet (see [Code signing policy](#code-signing-policy)).
+- **No tracking.** No accounts, analytics, telemetry, crash reporting or ads.
+- **Open and traceable.** The source is public, and releases are built only by a public
+  GitHub Actions workflow; each release can be traced to its commit and build run.
 
-To check GetCraft's own downloads by hand (checksums, signatures, build provenance), see
-[Verifying GetCraft downloads](docs/VERIFY.md).
+**Check it yourself:**
+[Verification guide](docs/VERIFY.md) ·
+[Releases](https://github.com/mbirnbach/getcraft/releases) ·
+[Release workflow](.github/workflows/release.yml) ([runs](https://github.com/mbirnbach/getcraft/actions/workflows/release.yml)) ·
+[Security policy](SECURITY.md) ·
+[Privacy policy](PRIVACY.md)
+
+Automated checks (dependency advisories, CodeQL) catch known kinds of problems; they don't prove
+the absence of bugs.
 
 ## Code signing policy
 
