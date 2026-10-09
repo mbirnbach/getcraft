@@ -6,7 +6,7 @@
 
 use getcraft_core::assets::{self, PackageKind};
 use getcraft_core::catalog::Catalog;
-use getcraft_core::github::{Client, Release};
+use getcraft_core::github::Client;
 use getcraft_core::install::Installer;
 use getcraft_core::platform::Platform;
 use getcraft_core::state::Paths;
@@ -54,10 +54,10 @@ fn main() {
     version_is(&installer, &launch, "0.5.0");
     println!("switched forward again");
 
-    // A failed update (a broken package) must leave the current copy in place.
-    let broken = paths.downloads_dir.join(format!("broken.{}", ext(kind)));
-    std::fs::write(&broken, b"not a package").unwrap();
-    assert!(installer.install(&tool, &broken, kind, Some(&launch), true, None).is_err());
+    // A failed update must leave everything in place. A missing package fails on every system
+    // (a broken file wouldn't on Linux, where the verified AppImage is simply copied).
+    let missing = paths.downloads_dir.join("missing-package");
+    assert!(installer.install(&tool, &missing, kind, Some(&launch), true, None).is_err());
     assert!(has_marker(&launch, "new"), "the current copy was restored");
     assert!(has_marker(&kept, "old"), "the kept copy survived the failed update");
     println!("a failed update restored the current copy");
@@ -78,10 +78,7 @@ fn main() {
 
 /// Downloads this platform's package of `repo@tag`, checked against the release's checksums.
 fn fetch(client: &Client, repo: &str, tag: &str, platform: Platform, dir: &Path) -> (PathBuf, PackageKind) {
-    let release: Release = serde_json::from_str(
-        &client.fetch_text(&format!("https://api.github.com/repos/{repo}/releases/tags/{tag}")).unwrap(),
-    )
-    .unwrap();
+    let release = client.release_by_tag(repo, tag).unwrap().expect("the release exists");
     let list = release.assets();
     let (asset, kind) = assets::select(&list, platform).expect("a build for this platform");
     let sums = client.fetch_text(&assets::checksum_file(&list).unwrap().url).unwrap();
@@ -100,14 +97,6 @@ fn fetch(client: &Client, repo: &str, tag: &str, platform: Platform, dir: &Path)
     )
     .unwrap();
     (dest, kind)
-}
-
-fn ext(kind: PackageKind) -> &'static str {
-    match kind {
-        PackageKind::Dmg => "dmg",
-        PackageKind::AppImage => "AppImage",
-        _ => "zip",
-    }
 }
 
 /// Drops a marker file into the installed folder so the test can tell the copies apart. Not on

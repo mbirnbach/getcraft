@@ -148,6 +148,14 @@ impl Client {
         }
     }
 
+    /// The release of `owner/repo` tagged `tag`, if there is one.
+    pub fn release_by_tag(&self, repo: &str, tag: &str) -> Result<Option<Release>> {
+        match self.api_get(&format!("{API}/repos/{repo}/releases/tags/{tag}"))? {
+            Some(body) => Ok(Some(serde_json::from_str(&body)?)),
+            None => Ok(None),
+        }
+    }
+
     pub fn repos_of(&self, owner: &str) -> Result<Vec<Repo>> {
         // Organisations and users have different endpoints; try the org one first.
         for kind in ["orgs", "users"] {

@@ -111,9 +111,9 @@ impl Installer {
                 Ok(Installed { path, kept: Some(kept) })
             }
             Err(e) => {
-                // Put everything back as it was.
+                // Put everything back as it was, replacing whatever the failed install left there.
                 if kept.exists()
-                    && let Err(restore) = move_path(&kept, root)
+                    && let Err(restore) = remove_path(root).map_err(Into::into).and_then(|()| move_path(&kept, root))
                 {
                     log::error!("could not restore {} after a failed update: {restore}", root.display());
                 }
