@@ -63,7 +63,7 @@ jobs:
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
       - name: Linux GUI dependencies and a virtual display
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev xvfb mesa-vulkan-drivers libgl1-mesa-dri
+        run: sudo apt-get update && sudo apt-get install -y libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev xvfb libxkbcommon-x11-0 mesa-vulkan-drivers libgl1-mesa-dri
       - run: cargo build --release -p getcraft
       - name: Check the executable needs no extra runtime
         if: runner.os == 'Windows'
