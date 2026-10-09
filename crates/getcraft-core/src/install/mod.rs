@@ -1,6 +1,9 @@
 //! Installs, removes, finds and launches tools. Every installer works without admin rights and
 //! swaps the new version into place only once it's fully unpacked.
 
+// Used by the Windows installer and self-updater; tested on every platform.
+#[cfg_attr(not(windows), allow(dead_code))]
+pub(crate) mod archive;
 #[cfg(target_os = "linux")]
 mod linux;
 #[cfg(target_os = "macos")]
@@ -54,8 +57,10 @@ impl Installer {
         match kind {
             #[cfg(target_os = "macos")]
             PackageKind::Dmg => {
+                let identity = crate::trust::mac_identity(&tool.id, &tool.repo)
+                    .ok_or_else(|| Error::Install(format!("{} isn't from a trusted publisher", tool.name)))?;
                 let dir = previous.filter(|p| p.extension().is_some_and(|e| e == "app")).and_then(Path::parent);
-                macos::install_dmg(package, dir.unwrap_or(&self.apps_dir), &self.work_dir)
+                macos::install_dmg(package, dir.unwrap_or(&self.apps_dir), &self.work_dir, &identity)
             }
             #[cfg(windows)]
             PackageKind::PortableZip => windows::install_zip(package, &self.apps_dir, tool),
@@ -69,7 +74,10 @@ impl Installer {
     #[allow(unused_variables)]
     pub fn uninstall(&self, tool: &Tool, path: &Path) -> Result<()> {
         #[cfg(target_os = "macos")]
-        return macos::uninstall(path);
+        return match crate::trust::mac_identity(&tool.id, &tool.repo) {
+            Some(identity) => macos::uninstall(path, &identity.bundle_id),
+            None => Err(Error::Install(format!("{} isn't from a trusted publisher", tool.name))),
+        };
         #[cfg(windows)]
         return windows::uninstall(tool, path);
         #[cfg(target_os = "linux")]
@@ -130,18 +138,22 @@ pub fn install_root(path: &Path) -> &Path {
     if path.extension().is_some_and(|e| e == "app") { path } else { path.parent().unwrap_or(path) }
 }
 
-/// Whether any process is running from the tool's install location. Updating a running app
-/// would pull files out from under it, so updates wait until it's closed.
+/// Whether any process is running from the tool's install location. Updates and uninstalls
+/// wait until it's closed, on every platform.
 pub fn is_running(path: &Path) -> bool {
     use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind};
+    // Compare resolved paths so symlinks or `..` on either side can't hide a running copy.
     let root = install_root(path);
+    let root = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
     let mut sys = System::new();
     sys.refresh_processes_specifics(
         ProcessesToUpdate::All,
         true,
         ProcessRefreshKind::nothing().with_exe(UpdateKind::OnlyIfNotSet),
     );
-    sys.processes().values().any(|p| p.exe().is_some_and(|exe| exe.starts_with(root)))
+    sys.processes().values().any(|p| {
+        p.exe().is_some_and(|exe| exe.starts_with(&root) || exe.canonicalize().is_ok_and(|exe| exe.starts_with(&root)))
+    })
 }
 
 /// Replaces `dest` with `staged` as atomically as the filesystem allows, restoring the old

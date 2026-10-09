@@ -12,6 +12,7 @@ pub mod install;
 pub mod platform;
 pub mod selfupdate;
 pub mod state;
+pub mod trust;
 pub mod version;
 
 /// Sent with every HTTP request so the ArtCraft team can identify (and contact) us in their logs.

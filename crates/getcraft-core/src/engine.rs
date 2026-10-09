@@ -32,6 +32,8 @@ pub struct LatestRelease {
     /// The package to install on this platform, if the release has one.
     pub package: Option<(Asset, PackageKind)>,
     pub checksums: Option<Asset>,
+    /// Detached minisign signature of `package` (`<file>.minisig`); GetCraft's own releases have one.
+    pub signature: Option<Asset>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -154,6 +156,20 @@ struct Inner {
 #[derive(Clone)]
 pub struct Engine {
     inner: Arc<Inner>,
+}
+
+/// Drops tools whose id, name or repository isn't acceptable, and strips control characters from
+/// the free text.
+fn sanitize_tool(mut tool: Tool) -> Option<Tool> {
+    use crate::trust::{clean_text, publisher_for, valid_id, valid_name};
+    if !valid_id(&tool.id) || !valid_name(&tool.name) || publisher_for(&tool.repo).is_none() {
+        log::warn!("ignoring untrusted or malformed tool entry {:?} ({})", tool.id, tool.repo);
+        return None;
+    }
+    tool.kind = clean_text(&tool.kind);
+    tool.description = clean_text(&tool.description);
+    tool.category = clean_text(&tool.category);
+    Some(tool)
 }
 
 pub fn now() -> u64 {
@@ -289,13 +305,15 @@ impl Engine {
         };
         let first_error = collected.error;
         if let Some(release) = collected.launcher {
-            self.consider_launcher_release(self.to_latest(release));
+            self.consider_launcher_release(self.to_latest(release, crate::trust::GETCRAFT_REPO));
         }
         let mut releases: HashMap<String, Option<LatestRelease>> = HashMap::new();
         let mut tools = Vec::new();
         for t in collected.tools {
-            releases.insert(t.tool.id.clone(), t.release.map(|r| self.to_latest(r)));
-            tools.push(t.tool);
+            // Remote data describes tools but can't widen what's trusted (see `trust`).
+            let Some(tool) = sanitize_tool(t.tool) else { continue };
+            releases.insert(tool.id.clone(), t.release.map(|r| self.to_latest(r, &tool.repo)));
+            tools.push(tool);
         }
         // Tools whose lookup failed this time keep what we knew about them.
         for entry in &self.lock().entries {
@@ -362,12 +380,20 @@ impl Engine {
         first_error.map_or(Ok(()), Err)
     }
 
-    fn to_latest(&self, release: Release) -> LatestRelease {
-        let assets = release.assets();
+    /// Only assets hosted in `repo`'s own GitHub releases are considered.
+    fn to_latest(&self, release: Release, repo: &str) -> LatestRelease {
+        let assets: Vec<Asset> =
+            release.assets().into_iter().filter(|a| crate::trust::is_release_asset_of(&a.url, repo)).collect();
+        let package = self.inner.platform.and_then(|p| assets::select(&assets, p)).map(|(a, k)| (a.clone(), k));
+        let signature = package
+            .as_ref()
+            .and_then(|(p, _)| assets.iter().find(|a| a.name == format!("{}.minisig", p.name)))
+            .cloned();
         LatestRelease {
             version: version::parse_tag(&release.tag_name).map_or(release.tag_name.clone(), |v| v.to_string()),
-            package: self.inner.platform.and_then(|p| assets::select(&assets, p)).map(|(a, k)| (a.clone(), k)),
+            package,
             checksums: assets::checksum_file(&assets).cloned(),
+            signature,
             html_url: release.html_url,
             published_at: release.published_at,
             notes: release.body.unwrap_or_default(),
@@ -405,12 +431,22 @@ impl Engine {
             let client = &this.inner.client;
             let file = this.inner.paths.downloads_dir.join(&asset.name);
             let result = (|| {
-                let expected = match &latest.checksums {
-                    Some(sums) => assets::find_checksum(&client.fetch_text(&sums.url)?, &asset.name),
-                    None => None,
-                };
+                let sums =
+                    latest.checksums.as_ref().ok_or_else(|| Error::Install("the update has no checksums".into()))?;
+                let expected = assets::find_checksum(&client.fetch_text(&sums.url)?, &asset.name)
+                    .ok_or_else(|| Error::Install("the update has no checksum".into()))?;
+                let signature = latest
+                    .signature
+                    .as_ref()
+                    .ok_or_else(|| Error::Install("the update isn't signed; not installing it".into()))?;
+                let signature = client.fetch_text(&signature.url)?;
                 let never = AtomicBool::new(false);
-                download::download(client.agent(), &asset.url, &file, expected.as_deref(), &never, |_, _| {})
+                download::download(client.agent(), &asset.url, &file, &expected, asset.size, &never, |_, _| {})?;
+                if let Err(e) = crate::selfupdate::verify_signature(&file, &asset.name, &signature) {
+                    let _ = fs::remove_file(&file);
+                    return Err(e);
+                }
+                Ok(())
             })();
             let mut m = this.lock();
             let Some(update) = m.launcher.as_mut().filter(|l| l.version == latest.version) else { return };
@@ -566,19 +602,16 @@ impl Engine {
             return Err(Error::Install(format!("Quit {} to update it", tool.name)));
         }
         let client = &self.inner.client;
-        let expected = match &latest.checksums {
-            Some(sums) => {
-                let found = assets::find_checksum(&client.fetch_text(&sums.url)?, &asset.name);
-                if found.is_none() {
-                    log::warn!("{} has no checksum entry for {}", tool.id, asset.name);
-                }
-                found
-            }
-            None => None,
-        };
+        // Every Crafting App publishes SHA256SUMS.txt; a release without one isn't installed.
+        let sums = latest
+            .checksums
+            .as_ref()
+            .ok_or_else(|| Error::Install(format!("{} {} has no published checksums", tool.name, latest.version)))?;
+        let expected = assets::find_checksum(&client.fetch_text(&sums.url)?, &asset.name)
+            .ok_or_else(|| Error::Install(format!("{} has no checksum for {}", tool.name, asset.name)))?;
 
         let file = self.inner.paths.downloads_dir.join(&asset.name);
-        download::download(client.agent(), &asset.url, &file, expected.as_deref(), cancel, |done, total| {
+        download::download(client.agent(), &asset.url, &file, &expected, asset.size, cancel, |done, total| {
             self.set_job(&tool.id, Job::Downloading { done, total });
         })?;
         self.set_job(&tool.id, Job::Installing);

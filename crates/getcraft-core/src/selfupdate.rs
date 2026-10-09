@@ -8,7 +8,37 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 /// The GitHub repository GetCraft is released from.
-pub const REPO: &str = "mbirnbach/getcraft";
+pub const REPO: &str = crate::trust::GETCRAFT_REPO;
+
+/// The public half of the minisign key GetCraft releases are signed with, created by
+/// `scripts/setup-update-signing.sh`. Every self-update must carry a valid signature from it;
+/// without a key in this file, self-updates are refused.
+const UPDATE_PUBLIC_KEY: &str = include_str!("../../../keys/update-signing.pub");
+
+/// Checks the detached minisign `signature` of the downloaded update `package`, which must have
+/// been signed as the release file `file_name` (so an older signed build can't be passed off as
+/// a newer one).
+pub fn verify_signature(package: &Path, file_name: &str, signature: &str) -> Result<()> {
+    verify_with_key(UPDATE_PUBLIC_KEY, package, file_name, signature)
+}
+
+fn verify_with_key(public_key_file: &str, package: &Path, file_name: &str, signature: &str) -> Result<()> {
+    use minisign_verify::{PublicKey, Signature};
+    let key = public_key_file
+        .lines()
+        .map(str::trim)
+        .find(|l| l.starts_with("RW"))
+        .ok_or_else(|| Error::Install("this build has no update signing key, so it can't update itself".into()))?;
+    let key = PublicKey::from_base64(key).map_err(|_| Error::Install("invalid update signing key".into()))?;
+    let unsigned = || Error::Install("the update isn't signed by GetCraft; not installing it".into());
+    let signature = Signature::decode(signature).map_err(|_| unsigned())?;
+    key.verify(&fs::read(package)?, &signature, false).map_err(|_| unsigned())?;
+    // minisign signs the trusted comment too; it records the file name, which includes the version.
+    if !signature.trusted_comment().split('\t').any(|field| field == format!("file:{file_name}")) {
+        return Err(Error::Install("the update's signature is for a different file".into()));
+    }
+    Ok(())
+}
 
 /// Where the running GetCraft is installed, in the form its updates replace.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -58,7 +88,8 @@ impl Location {
             #[cfg(target_os = "macos")]
             Location::MacApp(app) => {
                 let dir = app.parent().ok_or_else(|| Error::Install("bad app location".into()))?;
-                crate::install::macos::install_dmg(package, dir, work_dir)
+                // On top of the minisign signature: Apple's signature must be ours too.
+                crate::install::macos::install_dmg(package, dir, work_dir, &crate::trust::getcraft_identity())
             }
             #[cfg(windows)]
             Location::WindowsDir(dir) => apply_windows(package, dir, work_dir),
@@ -98,16 +129,18 @@ impl Location {
 fn apply_windows(zip_path: &Path, dir: &Path, work_dir: &Path) -> Result<PathBuf> {
     let staged = work_dir.join("self-update");
     crate::install::remove_path(&staged)?;
-    let mut archive = zip::ZipArchive::new(fs::File::open(zip_path)?)
-        .map_err(|e| Error::Install(format!("the update isn't a valid zip: {e}")))?;
-    archive.extract(&staged).map_err(|e| Error::Install(format!("unpacking the update failed: {e}")))?;
+    crate::install::archive::extract_zip(zip_path, &staged, crate::install::archive::MAX_TOTAL_BYTES)?;
     // The zip holds a single `GetCraft/` folder.
     let entries: Vec<_> = fs::read_dir(&staged)?.flatten().collect();
     let root = match entries.as_slice() {
         [only] if only.path().is_dir() => only.path(),
         _ => staged.clone(),
     };
-    for entry in fs::read_dir(&root)?.flatten() {
+    if !root.join("GetCraft.exe").is_file() {
+        let _ = crate::install::remove_path(&staged);
+        return Err(Error::Install("the update doesn't contain GetCraft.exe".into()));
+    }
+    for entry in fs::read_dir(&root)?.flatten().filter(|e| e.path().is_file()) {
         let dest = dir.join(entry.file_name());
         if dest.exists() {
             // A running exe can be renamed but not overwritten.
@@ -142,4 +175,50 @@ pub fn relaunch(target: &Path, hidden: bool) -> Result<()> {
     #[cfg(all(unix, not(target_os = "macos")))]
     let spawned = Command::new("/bin/sh").arg("-c").arg("sleep 1; exec \"$0\" \"$@\"").arg(target).args(&args).spawn();
     spawned.map(drop).map_err(|e| Error::Install(format!("could not restart GetCraft: {e}")))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn signed(dir: &Path, file_name: &str, data: &[u8]) -> (String, PathBuf, String) {
+        let keys = minisign::KeyPair::generate_unencrypted_keypair().unwrap();
+        let path = dir.join(file_name);
+        fs::write(&path, data).unwrap();
+        let comment = format!("timestamp:1\tfile:{file_name}\thashed");
+        let sig = minisign::sign(Some(&keys.pk), &keys.sk, data, Some(&comment), None).unwrap();
+        let public = format!("untrusted comment: test key\n{}\n", keys.pk.to_base64());
+        (public, path, sig.into_string())
+    }
+
+    #[test]
+    fn accepts_a_correct_signature() {
+        let dir = tempfile::tempdir().unwrap();
+        let (key, path, sig) = signed(dir.path(), "getcraft-0.2.0-linux-x86_64.AppImage", b"build");
+        verify_with_key(&key, &path, "getcraft-0.2.0-linux-x86_64.AppImage", &sig).unwrap();
+    }
+
+    #[test]
+    fn rejects_tampering_and_mismatches() {
+        let dir = tempfile::tempdir().unwrap();
+        let (key, path, sig) = signed(dir.path(), "getcraft-0.2.0-linux-x86_64.AppImage", b"build");
+        // Signed for another (older) file.
+        assert!(verify_with_key(&key, &path, "getcraft-0.3.0-linux-x86_64.AppImage", &sig).is_err());
+        // Modified contents.
+        fs::write(&path, b"evil").unwrap();
+        assert!(verify_with_key(&key, &path, "getcraft-0.2.0-linux-x86_64.AppImage", &sig).is_err());
+        // Signed by another key.
+        let (other_key, other_path, _) = signed(dir.path(), "x", b"build");
+        let (_, _, other_sig) = signed(dir.path(), "getcraft-0.2.0-linux-x86_64.AppImage", b"build");
+        assert!(verify_with_key(&other_key, &other_path, "getcraft-0.2.0-linux-x86_64.AppImage", &other_sig).is_err());
+        // Garbage.
+        assert!(verify_with_key(&key, &path, "x", "not a signature").is_err());
+    }
+
+    #[test]
+    fn refuses_without_a_key() {
+        let dir = tempfile::tempdir().unwrap();
+        let (_, path, sig) = signed(dir.path(), "f", b"build");
+        assert!(verify_with_key("untrusted comment: not configured\n", &path, "f", &sig).is_err());
+    }
 }

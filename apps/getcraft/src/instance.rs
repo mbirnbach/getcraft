@@ -31,7 +31,7 @@ pub fn acquire(dir: &Path) -> Instance {
         Ok(listener) => {
             if let Ok(addr) = listener.local_addr() {
                 let _ = std::fs::create_dir_all(dir);
-                let _ = std::fs::write(port_file(dir), addr.port().to_string());
+                write_private(&port_file(dir), addr.port().to_string().as_bytes());
             }
             Instance::Primary(Some(listener))
         }
@@ -40,6 +40,23 @@ pub fn acquire(dir: &Path) -> Instance {
             log::warn!("single-instance listener unavailable: {e}");
             Instance::Primary(None)
         }
+    }
+}
+
+/// Writes a file only the current user can read or change. Other users on the machine can't
+/// redirect a later launch to a fake instance. (Programs running as the same user could, but
+/// they could just as well start or stop GetCraft themselves.)
+fn write_private(path: &Path, bytes: &[u8]) {
+    let _ = std::fs::remove_file(path);
+    #[cfg(unix)]
+    let file = {
+        use std::os::unix::fs::OpenOptionsExt;
+        std::fs::OpenOptions::new().write(true).create_new(true).mode(0o600).open(path)
+    };
+    #[cfg(not(unix))]
+    let file = std::fs::File::create(path);
+    if let Ok(mut file) = file {
+        let _ = file.write_all(bytes);
     }
 }
 

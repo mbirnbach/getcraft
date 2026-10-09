@@ -1,16 +1,17 @@
 use super::{remove_path, swap_into_place};
 use crate::catalog::Tool;
 use crate::{Error, Result};
-use std::fs::{self, File};
+use std::fs;
 use std::path::{Path, PathBuf};
 
 pub fn install_zip(zip_path: &Path, apps_dir: &Path, tool: &Tool) -> Result<PathBuf> {
     let dest = apps_dir.join(&tool.id);
     let staged = apps_dir.join(format!(".{}.getcraft-new", tool.id));
     remove_path(&staged)?;
-    let mut archive = zip::ZipArchive::new(File::open(zip_path)?)
-        .map_err(|e| Error::Install(format!("the download isn't a valid zip: {e}")))?;
-    archive.extract(&staged).map_err(|e| Error::Install(format!("unpacking failed: {e}")))?;
+    if let Err(e) = super::archive::extract_zip(zip_path, &staged, super::archive::MAX_TOTAL_BYTES) {
+        let _ = remove_path(&staged);
+        return Err(e);
+    }
 
     // Portable zips often wrap everything in one top-level folder; install its contents.
     let entries: Vec<_> = fs::read_dir(&staged)?.filter_map(|e| e.ok()).collect();
@@ -29,17 +30,11 @@ pub fn install_zip(zip_path: &Path, apps_dir: &Path, tool: &Tool) -> Result<Path
     Ok(exe)
 }
 
+/// The program must be `<id>.exe` at the top of the package, as in every Crafting App. Guessing
+/// among other executables could start the wrong (or a planted) program.
 fn find_exe(dir: &Path, tool: &Tool) -> Option<PathBuf> {
-    let exes: Vec<PathBuf> = fs::read_dir(dir)
-        .ok()?
-        .filter_map(|e| e.ok().map(|e| e.path()))
-        .filter(|p| p.extension().is_some_and(|e| e.eq_ignore_ascii_case("exe")))
-        .collect();
-    let stem = |p: &PathBuf| p.file_stem().unwrap_or_default().to_string_lossy().to_ascii_lowercase();
-    exes.iter()
-        .find(|p| stem(p) == tool.id || stem(p) == tool.name.to_ascii_lowercase())
-        .or_else(|| exes.iter().find(|p| !stem(p).contains("uninstall") && !stem(p).ends_with("-cli")))
-        .cloned()
+    let exe = dir.join(format!("{}.exe", tool.id));
+    exe.is_file().then_some(exe)
 }
 
 fn shortcut_path(tool: &Tool) -> Option<PathBuf> {

@@ -12,7 +12,7 @@ eframe = "0.36"
 egui = "0.36"
 egui_extras = { version = "0.36", features = ["image", "http"] }
 env_logger = "0.11.11"
-getcraft-core = { version = "0.1.0", path = "../../crates/getcraft-core" }
+getcraft-core = { path = "../../crates/getcraft-core" }
 image = { version = "0.25.10", default-features = false, features = ["png", "ico"] }
 log = "0.4.34"
 notify-rust = "4.18.2"

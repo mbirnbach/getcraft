@@ -14,6 +14,10 @@ use std::time::Duration;
 
 const API: &str = "https://api.github.com";
 
+/// Upper bounds for small downloads, so a broken or hostile server can't exhaust memory.
+const MAX_TEXT_BYTES: u64 = 4 * 1024 * 1024;
+const MAX_BYTES: u64 = 2 * 1024 * 1024;
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Release {
     pub tag_name: String,
@@ -154,21 +158,23 @@ impl Client {
         Ok(Vec::new())
     }
 
-    /// Plain (non-API) GET for small text files such as checksum lists or the catalog.
+    /// Plain (non-API) GET for small text files such as the index, checksum lists or signatures.
+    /// Responses over `MAX_TEXT_BYTES` are rejected.
     pub fn fetch_text(&self, url: &str) -> Result<String> {
         let mut resp = self.agent.get(url).call()?;
         if resp.status().as_u16() != 200 {
             return Err(Error::Http(format!("HTTP {} for {url}", resp.status().as_u16())));
         }
-        Ok(resp.body_mut().read_to_string()?)
+        Ok(resp.body_mut().with_config().limit(MAX_TEXT_BYTES).read_to_string()?)
     }
 
+    /// GET for small binary files such as icons; responses over `MAX_BYTES` are rejected.
     pub fn fetch_bytes(&self, url: &str) -> Result<Vec<u8>> {
         let mut resp = self.agent.get(url).call()?;
         if resp.status().as_u16() != 200 {
             return Err(Error::Http(format!("HTTP {} for {url}", resp.status().as_u16())));
         }
-        Ok(resp.body_mut().read_to_vec()?)
+        Ok(resp.body_mut().with_config().limit(MAX_BYTES).read_to_vec()?)
     }
 
     /// Writes the ETag cache to disk.

@@ -50,7 +50,9 @@ pub struct Collected {
 /// release of every tool. Discovered repositories without a release are left out.
 pub fn collect(client: &Client, catalog: Catalog) -> Collected {
     let mut tools = catalog.tools.clone();
-    for owner in &catalog.discovery.owners {
+    // Only trusted publishers are scanned, whatever the (remote) catalog lists.
+    let owners = catalog.discovery.owners.iter().filter(|o| crate::trust::publisher_for(&format!("{o}/x")).is_some());
+    for owner in owners {
         match client.repos_of(owner) {
             Ok(repos) => {
                 for repo in repos {

@@ -112,14 +112,23 @@ impl State {
     }
 }
 
-/// Writes via a temporary file and rename so a crash never leaves a truncated file behind.
+/// Writes via a temporary file and rename so a crash never leaves a truncated file behind, and
+/// flushes both the file and (on Unix) its folder so the new contents survive a power loss.
 pub fn write_atomic(path: &Path, bytes: &[u8]) -> Result<()> {
+    use std::io::Write;
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
     let tmp = path.with_extension("tmp");
-    fs::write(&tmp, bytes)?;
+    let mut file = fs::File::create(&tmp)?;
+    file.write_all(bytes)?;
+    file.sync_all()?;
+    drop(file);
     fs::rename(&tmp, path)?;
+    #[cfg(unix)]
+    if let Some(parent) = path.parent() {
+        fs::File::open(parent)?.sync_all()?;
+    }
     Ok(())
 }
 

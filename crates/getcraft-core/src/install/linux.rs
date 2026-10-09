@@ -12,7 +12,8 @@ pub fn install_appimage(file: &Path, apps_dir: &Path, tool: &Tool, icon: Option<
     let staged = dir.join(format!(".{}.AppImage.getcraft-new", tool.id));
     fs::copy(file, &staged)?;
     fs::set_permissions(&staged, fs::Permissions::from_mode(0o755))?;
-    // Renaming over a running AppImage is fine on Linux: the old inode stays alive until exit.
+    // The engine only updates an app that isn't running (see `install::is_running`), so this
+    // rename never pulls the file out from under a running copy.
     fs::rename(&staged, &dest)?;
 
     let icon_path = dir.join("icon.png");
@@ -34,15 +35,40 @@ fn write_desktop_entry(tool: &Tool, exe: &Path, icon: Option<&Path>) -> Result<(
     fs::create_dir_all(path.parent().unwrap())?;
     let icon = icon.map(|p| p.display().to_string()).unwrap_or_else(|| format!("ai.storyteller.{}", tool.id));
     let entry = format!(
-        "[Desktop Entry]\nType=Application\nName={name}\nComment={comment}\nExec=\"{exe}\" %F\nIcon={icon}\n\
+        "[Desktop Entry]\nType=Application\nName={name}\nComment={comment}\nExec={exec} %F\nIcon={icon}\n\
          Terminal=false\nCategories=Graphics;Office;AudioVideo;\nX-GetCraft-Id={id}\n",
-        name = tool.name,
-        comment = tool.kind,
-        exe = exe.display(),
-        id = tool.id,
+        name = desktop_value(&tool.name),
+        comment = desktop_value(&tool.kind),
+        exec = desktop_value(&exec_arg(&exe.to_string_lossy())),
+        icon = desktop_value(&icon),
+        id = desktop_value(&tool.id),
     );
     fs::write(path, entry)?;
     Ok(())
+}
+
+/// A string value per the Desktop Entry spec: no line breaks or other control characters (which
+/// could start a new key), and backslashes escaped.
+fn desktop_value(text: &str) -> String {
+    crate::trust::clean_text(text).replace('\\', "\\\\")
+}
+
+/// One quoted argument for the `Exec` key: inside double quotes, `"`, `` ` ``, `$` and `\` are
+/// backslash-escaped, and `%` (field codes) is doubled.
+fn exec_arg(arg: &str) -> String {
+    let mut quoted = String::from('"');
+    for c in arg.chars() {
+        match c {
+            '"' | '`' | '$' | '\\' => {
+                quoted.push('\\');
+                quoted.push(c);
+            }
+            '%' => quoted.push_str("%%"),
+            c => quoted.push(c),
+        }
+    }
+    quoted.push('"');
+    quoted
 }
 
 pub fn uninstall(tool: &Tool, exe: &Path) -> Result<()> {
@@ -55,4 +81,21 @@ pub fn uninstall(tool: &Tool, exe: &Path) -> Result<()> {
         let _ = fs::remove_file(entry);
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn desktop_values_cannot_add_keys() {
+        assert_eq!(desktop_value("Evil\nExec=rm -rf ~"), "Evil Exec=rm -rf ~");
+        assert_eq!(desktop_value("a\\b"), "a\\\\b");
+    }
+
+    #[test]
+    fn exec_paths_are_quoted() {
+        assert_eq!(exec_arg("/home/a b/x.AppImage"), "\"/home/a b/x.AppImage\"");
+        assert_eq!(exec_arg("/h/$x\"`%"), "\"/h/\\$x\\\"\\`%%\"");
+    }
 }
