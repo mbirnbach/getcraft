@@ -76,6 +76,8 @@ impl GetCraftApp {
         flags: crate::Flags,
     ) -> Self {
         let hidden = flags.hidden;
+        // Being created means the renderer is up; clear the crash note (see `main::run`).
+        crate::renderer_started(paths.state_file.parent().unwrap());
         egui_extras::install_image_loaders(&cc.egui_ctx);
         theme::apply(&cc.egui_ctx);
 

@@ -76,23 +76,41 @@ fn main() -> ExitCode {
     }
 }
 
-/// Opens the window, trying the graphics backends in turn. wgpu (DirectX 12, Vulkan, Metal or
-/// OpenGL ES) comes first; plain OpenGL is the fallback for machines, often virtual ones, where
-/// wgpu finds no usable graphics device. `GETCRAFT_RENDERER=glow|wgpu` picks one directly.
+/// Opens the window, trying the graphics backends in turn: wgpu first, plain OpenGL ("glow") as
+/// the fallback. `GETCRAFT_RENDERER=glow|wgpu` picks one directly.
+///
+/// A broken graphics driver can crash the process outright instead of returning an error, which
+/// no fallback can catch. So a note naming the renderer being started is left in the data folder
+/// and removed once the app is up ([`renderer_started`]). If it's still there on the next launch,
+/// that renderer crashed, and GetCraft sticks to OpenGL from then on.
 fn run(paths: Paths, listener: Option<TcpListener>, flags: Flags) -> Result<(), String> {
-    let renderers = match std::env::var("GETCRAFT_RENDERER").as_deref() {
-        Ok("glow") => vec![eframe::Renderer::Glow],
-        Ok("wgpu") => vec![eframe::Renderer::Wgpu],
+    let data_dir = paths.state_file.parent().unwrap().to_path_buf();
+    let starting = data_dir.join("renderer-starting");
+    let preference = data_dir.join("renderer");
+    if let Ok(crashed) = std::fs::read_to_string(&starting) {
+        log::warn!("the last start crashed while starting the {crashed} renderer; using OpenGL from now on");
+        let _ = std::fs::write(&preference, "glow");
+        let _ = std::fs::remove_file(&starting);
+    }
+    let preferred = std::env::var("GETCRAFT_RENDERER")
+        .ok()
+        .or_else(|| std::fs::read_to_string(&preference).ok().map(|s| s.trim().to_owned()));
+    let renderers = match preferred.as_deref() {
+        Some("glow") => vec![eframe::Renderer::Glow, eframe::Renderer::Wgpu],
+        Some("wgpu") => vec![eframe::Renderer::Wgpu],
         _ => vec![eframe::Renderer::Wgpu, eframe::Renderer::Glow],
     };
+
     // The app is created only once a renderer works, so keep its inputs until then.
     let startup = Arc::new(Mutex::new(Some((paths, listener))));
     let mut last_error = String::new();
     for renderer in renderers {
         log::info!("starting with the {renderer:?} renderer");
+        let _ = std::fs::write(&starting, format!("{renderer:?}"));
         let app_inputs = startup.clone();
         let options = eframe::NativeOptions {
             renderer,
+            wgpu_options: wgpu_options(),
             viewport: egui::ViewportBuilder::default()
                 .with_title("GetCraft")
                 .with_icon(window_icon())
@@ -109,6 +127,7 @@ fn run(paths: Paths, listener: Option<TcpListener>, flags: Flags) -> Result<(), 
                 Ok(Box::new(app::GetCraftApp::new(cc, paths, listener, flags)))
             }),
         );
+        let _ = std::fs::remove_file(&starting);
         match result {
             Ok(()) => return Ok(()),
             // Once the app was created, the error came from the running app, not the renderer.
@@ -120,6 +139,24 @@ fn run(paths: Paths, listener: Option<TcpListener>, flags: Flags) -> Result<(), 
         }
     }
     Err(last_error)
+}
+
+/// Called by the app once it's created, i.e. once the renderer started without crashing.
+pub fn renderer_started(data_dir: &std::path::Path) {
+    let _ = std::fs::remove_file(data_dir.join("renderer-starting"));
+}
+
+/// Which graphics APIs wgpu may use. On Windows that's DirectX 12 and OpenGL, but not Vulkan:
+/// Windows' Vulkan drivers are a separate, much less tested path, and older Intel ones crash
+/// outright (seen with igvk64.dll 30.0.101.1692 on UHD Graphics 620). `WGPU_BACKEND` overrides it.
+fn wgpu_options() -> eframe::egui_wgpu::WgpuConfiguration {
+    let mut options = eframe::egui_wgpu::WgpuConfiguration::default();
+    if cfg!(windows) && std::env::var_os("WGPU_BACKEND").is_none() {
+        let mut setup = eframe::egui_wgpu::WgpuSetupCreateNew::without_display_handle();
+        setup.instance_descriptor.backends = eframe::wgpu::Backends::DX12 | eframe::wgpu::Backends::GL;
+        options.wgpu_setup = eframe::egui_wgpu::WgpuSetup::CreateNew(setup);
+    }
+    options
 }
 
 /// The icon eframe applies to the window and, on macOS, to the Dock.
