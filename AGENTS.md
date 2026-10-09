@@ -172,7 +172,9 @@ hands off to the installed GetCraft if it's running (single instance), so stop o
   `getcraft-<v>-windows-setup.exe` (Inno Setup, x64 + ARM64 in one, per user, AppId
   `{7CF358B6-E104-44DA-AC2E-E883DB1AA9F1}`, never change it), `getcraft-<v>-windows-<x64|arm64>-portable.zip`,
   `getcraft-<v>-linux-<x86_64|aarch64>.AppImage`, each with `.minisig`, plus `SHA256SUMS.txt`.
-- Work on a branch and open a PR; the app/CI then shows the checks. Commit messages and PRs end
+- Work on a branch and open a PR; the app/CI then shows the checks. `main` requires branches to
+  be up to date: when two PRs are queued, the second goes "BEHIND" after the first merges and
+  auto-merge won't move it. Run `gh pr update-branch <n>` and it merges after the re-run. Commit messages and PRs end
   with the attribution trailer the session tells you to use.
 
 ## Things learned the hard way
