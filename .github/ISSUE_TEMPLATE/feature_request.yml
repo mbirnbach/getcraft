@@ -1,0 +1,16 @@
+name: Idea or feature request
+description: Suggest something GetCraft could do better.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What would you like GetCraft to do?
+      description: Describe the problem or situation first, then the idea.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Anything else?
+      description: Alternatives you considered, examples from other apps, screenshots.

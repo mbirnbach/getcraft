@@ -1,0 +1,53 @@
+name: Bug report
+description: Something in GetCraft doesn't work (finding, installing, updating apps, or GetCraft itself).
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! If the problem is inside an app GetCraft installed (PhotoCraft crashes, …), please report it in that app's repository instead.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: GetCraft version
+      description: Settings → About.
+      placeholder: "0.1.1"
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: System
+      options:
+        - macOS (Apple silicon)
+        - macOS (Intel)
+        - Windows x64
+        - Windows on ARM
+        - Linux x86_64
+        - Linux ARM64
+    validations:
+      required: true
+  - type: input
+    id: os-version
+    attributes:
+      label: System version
+      placeholder: "macOS 26.1, Windows 11 24H2, Ubuntu 24.04, …"
+  - type: input
+    id: app
+    attributes:
+      label: Which app were you installing or updating, if any?
+      placeholder: "PhotoCraft 0.5.0"
+  - type: textarea
+    id: details
+    attributes:
+      label: Error message or log
+      description: |
+        Any error GetCraft showed. For a log, start GetCraft from a terminal with `RUST_LOG=debug`. Please remove anything private (like your user name in file paths).
+      render: text

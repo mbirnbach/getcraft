@@ -33,6 +33,7 @@
   <a href="#development">Development</a> ·
   <a href="#privacy">Privacy</a> ·
   <a href="#how-downloads-are-verified">Security</a> ·
+  <a href="#contributing">Contributing</a> ·
   <a href="#license-and-credits">License and credits</a>
 </p>
 
@@ -220,6 +221,12 @@ fixed versions, are signed.
 Privacy policy: see [PRIVACY.md](PRIVACY.md). GetCraft only transfers information to the GitHub
 services listed there, as needed to check for and download updates. To report a security problem,
 see [SECURITY.md](SECURITY.md).
+
+## Contributing
+
+Bug reports, ideas and pull requests are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md). Problems
+with a Crafting App itself belong in that app's repository. Everyone taking part follows the
+[Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## License and credits
 

@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: A problem with a Crafting App itself (PhotoCraft, FilmCraft, …)
+    url: https://github.com/storytold
+    about: GetCraft only installs the apps. Bugs and ideas for an app belong in that app's own repository.
+  - name: Report a security problem
+    url: https://github.com/mbirnbach/getcraft/security/advisories/new
+    about: Please report vulnerabilities privately, not as a public issue.
