@@ -120,7 +120,7 @@ impl GetCraftApp {
             background::sync_launch_at_login(engine.snapshot().settings.launch_at_login).err()
         };
 
-        Self {
+        let mut app = Self {
             engine,
             events,
             page: Page::Apps,
@@ -138,7 +138,16 @@ impl GetCraftApp {
             ctx: cc.egui_ctx.clone(),
             smoke_test: flags.smoke_test,
             frames: 0,
+        };
+        if flags.after_update && !flags.smoke_test {
+            let version = env!("CARGO_PKG_VERSION");
+            if hidden {
+                notify::message("GetCraft was updated", &format!("You're now on version {version}."));
+            } else {
+                app.toast(format!("GetCraft was updated to version {version}"), true);
+            }
         }
+        app
     }
 
     /// Installs the downloaded GetCraft update and restarts into it.
@@ -249,7 +258,10 @@ impl eframe::App for GetCraftApp {
                     let verb = if updated { "updated to" } else { "installed," };
                     self.toast(format!("{tool} {verb} version {version}"), true);
                 }
-                Event::Failed { tool, error } => self.toast(format!("{tool}: {error}"), false),
+                Event::Failed { tool, error, .. } => self.toast(format!("{tool}: {error}"), false),
+                Event::LauncherFailed { version, error } => {
+                    self.toast(format!("Couldn't update GetCraft to {version}: {error}"), false)
+                }
                 Event::UpdateAvailable { .. } | Event::LauncherReady { .. } => {}
             }
         }

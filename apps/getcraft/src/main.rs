@@ -22,12 +22,15 @@ pub struct Flags {
     /// `--smoke-test`: start everything except network access, draw a few frames and quit.
     /// Release builds run this in CI to prove the app starts on a clean system.
     pub smoke_test: bool,
+    /// `--after-update`: started by the self-updater, so announce the new version.
+    pub after_update: bool,
 }
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().collect();
     let has = |flag: &str| args.iter().any(|a| a == flag);
-    let flags = Flags { hidden: has("--background"), smoke_test: has("--smoke-test") };
+    let flags =
+        Flags { hidden: has("--background"), smoke_test: has("--smoke-test"), after_update: has("--after-update") };
 
     let Some(paths) = Paths::new() else {
         diagnostics::show_error("GetCraft can't start", "Couldn't find your user folders.");

@@ -110,10 +110,17 @@ pub enum Event {
     Failed {
         tool: String,
         error: String,
+        /// The install was started by an update policy, not by the user in the window.
+        automatic: bool,
     },
     /// A GetCraft update has been downloaded and can be applied with a restart.
     LauncherReady {
         version: String,
+    },
+    /// Downloading or verifying a GetCraft update failed (reported once per version).
+    LauncherFailed {
+        version: String,
+        error: String,
     },
 }
 
@@ -129,6 +136,8 @@ struct Model {
     launcher: Option<LauncherUpdate>,
     /// The downloaded GetCraft update, once `launcher` is ready.
     launcher_package: Option<PathBuf>,
+    /// The GetCraft version whose failed update we already reported, so retries stay quiet.
+    launcher_failure_reported: Option<String>,
 }
 
 impl Model {
@@ -200,6 +209,7 @@ impl Engine {
             cancels: HashMap::new(),
             launcher: None,
             launcher_package: None,
+            launcher_failure_reported: None,
         };
         if let Some(location) = &self_location {
             location.clean_up();
@@ -461,7 +471,12 @@ impl Engine {
                 Err(e) => {
                     log::warn!("downloading GetCraft {} failed: {e}", latest.version);
                     update.error = Some(e.to_string());
+                    let first = m.launcher_failure_reported.as_deref() != Some(latest.version.as_str());
+                    m.launcher_failure_reported = Some(latest.version.clone());
                     drop(m);
+                    if first {
+                        this.emit(Event::LauncherFailed { version: latest.version.clone(), error: e.to_string() });
+                    }
                 }
             }
             this.changed();
@@ -521,13 +536,19 @@ impl Engine {
         for (id, path) in to_install {
             // A running app is retried on the next scheduler tick.
             if !install::is_running(&path) {
-                self.install(&id);
+                self.install_as(&id, true);
             }
         }
     }
 
-    /// Installs or updates a tool in the background.
+    /// Installs or updates a tool in the background, at the user's request.
     pub fn install(&self, id: &str) {
+        self.install_as(id, false);
+    }
+
+    /// `automatic`: started by an update policy rather than the user (affects how failures are
+    /// reported).
+    fn install_as(&self, id: &str, automatic: bool) {
         let (tool, latest, previous, cancel) = {
             let mut m = self.lock();
             let cancel = Arc::new(AtomicBool::new(false));
@@ -569,7 +590,7 @@ impl Engine {
                     if let Some(entry) = m.entry(&tool.id) {
                         entry.error = Some(e.to_string());
                     }
-                    Some(Event::Failed { tool: tool.name.clone(), error: e.to_string() })
+                    Some(Event::Failed { tool: tool.name.clone(), error: e.to_string(), automatic })
                 }
             };
             if let Some(entry) = m.entry(&tool.id) {
