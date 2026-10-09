@@ -12,7 +12,7 @@ use crate::index::{self, Collected};
 use crate::install::{self, Installer};
 use crate::platform::Platform;
 use crate::selfupdate::Location;
-use crate::state::{InstallRecord, Paths, Settings, State, UpdatePolicy};
+use crate::state::{InstallRecord, KeptVersion, Paths, Settings, State, UpdatePolicy};
 use crate::{Error, Result, download, version};
 use std::collections::HashMap;
 use std::fs;
@@ -40,9 +40,14 @@ pub struct LatestRelease {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Job {
-    Downloading { done: u64, total: Option<u64> },
+    Downloading {
+        done: u64,
+        total: Option<u64>,
+    },
     Installing,
     Removing,
+    /// Swapping in the kept previous version.
+    Switching,
 }
 
 #[derive(Clone, Debug)]
@@ -344,6 +349,7 @@ impl Engine {
             let current = match installed.get(&tool.id) {
                 Some(record) if record.path.exists() => {
                     let mut record = record.clone();
+                    record.previous = record.previous.filter(|kept| kept.path.exists());
                     if let Some(v) = self.inner.installer.installed_version(tool, &record) {
                         record.version = v;
                     }
@@ -355,6 +361,8 @@ impl Engine {
                     installed_at: now(),
                     managed: false,
                     msi: found.msi,
+                    previous: None,
+                    rolled_back_from: None,
                 }),
             };
             on_disk.insert(tool.id.clone(), current);
@@ -517,6 +525,12 @@ impl Engine {
             let settings = m.state.settings.clone();
             for entry in m.entries.iter().filter(|e| e.update_available() && e.job.is_none()) {
                 let version = entry.latest.as_ref().map(|l| l.version.clone()).unwrap_or_default();
+                // The version the user switched back from is shown as an update but only installed
+                // when they ask; a later release is handled as usual.
+                let left = entry.installed.as_ref().and_then(|i| i.rolled_back_from.as_deref());
+                if left == Some(version.as_str()) {
+                    continue;
+                }
                 let policy = match settings.policy_for(&entry.tool.id) {
                     // Updating an MSI copy asks for admin rights, so it only happens on request.
                     UpdatePolicy::Auto if entry.installed.as_ref().is_some_and(|i| i.msi) => UpdatePolicy::Notify,
@@ -576,11 +590,12 @@ impl Engine {
             m.cancels.insert(id.to_owned(), cancel);
             job
         };
+        let keep_previous = self.lock().state.settings.keep_previous;
         self.changed();
 
         let this = self.clone();
         thread::spawn(move || {
-            let result = this.run_install(&tool, &latest, previous.as_ref(), &cancel);
+            let result = this.run_install(&tool, &latest, previous.as_ref(), keep_previous, &cancel);
             let mut m = this.lock();
             m.cancels.remove(&tool.id);
             let event = match result {
@@ -629,6 +644,7 @@ impl Engine {
         tool: &Tool,
         latest: &LatestRelease,
         previous: Option<&InstallRecord>,
+        keep_previous: bool,
         cancel: &AtomicBool,
     ) -> Result<InstallRecord> {
         // A copy installed with the app's own `.msi` is updated with the new `.msi`.
@@ -656,10 +672,26 @@ impl Engine {
 
         let icon = if cfg!(target_os = "linux") { client.fetch_bytes(&tool.icon_url()).ok() } else { None };
         let previous_path = previous.map(|p| p.path.as_path());
-        let result = self.inner.installer.install(tool, &file, kind, previous_path, icon.as_deref());
+        let result = self.inner.installer.install(tool, &file, kind, previous_path, keep_previous, icon.as_deref());
         let _ = fs::remove_file(&file);
-        let path = result?;
-        Ok(InstallRecord { version: latest.version.clone(), path, installed_at: now(), managed: !msi, msi })
+        let installed = result?;
+        // Without a newly kept copy, an older kept one would be two versions back: drop it.
+        if installed.kept.is_none()
+            && previous.is_some_and(|p| p.previous.is_some())
+            && let Err(e) = self.inner.installer.remove_kept(&tool.id)
+        {
+            log::warn!("could not remove the kept version of {}: {e}", tool.id);
+        }
+        let kept = installed.kept.zip(previous).map(|(path, p)| KeptVersion { version: p.version.clone(), path });
+        Ok(InstallRecord {
+            version: latest.version.clone(),
+            path: installed.path,
+            installed_at: now(),
+            managed: !msi,
+            msi,
+            previous: kept,
+            rolled_back_from: None,
+        })
     }
 
     pub fn update_all(&self) {
@@ -696,6 +728,12 @@ impl Engine {
             } else {
                 this.inner.installer.uninstall(&tool, &record)
             };
+            if result.is_ok()
+                && record.previous.is_some()
+                && let Err(e) = this.inner.installer.remove_kept(&tool.id)
+            {
+                log::warn!("could not remove the kept version of {}: {e}", tool.id);
+            }
             let mut m = this.lock();
             let ok = result.is_ok();
             if ok {
@@ -711,6 +749,101 @@ impl Engine {
             this.save(&m);
             drop(m);
             this.changed();
+        });
+    }
+
+    /// Swaps the installed version of a tool with the kept previous one. Doing it again swaps
+    /// back.
+    pub fn switch_to_previous(&self, id: &str) {
+        let (tool, record, kept) = {
+            let mut m = self.lock();
+            let Some(entry) = m.entry(id) else { return };
+            let Some(record) = entry.installed.clone() else { return };
+            let Some(kept) = record.previous.clone() else { return };
+            if entry.job.is_some() {
+                return;
+            }
+            entry.job = Some(Job::Switching);
+            entry.error = None;
+            (entry.tool.clone(), record, kept)
+        };
+        self.changed();
+        let this = self.clone();
+        thread::spawn(move || {
+            let result = if install::is_running(&record.path) {
+                Err(Error::Install(format!("Quit {} to switch versions", tool.name)))
+            } else {
+                this.inner.installer.switch_to_kept(&tool, &record.path, &kept.path)
+            };
+            let mut m = this.lock();
+            let installed = match result {
+                Ok((path, now_kept)) => {
+                    let left_newer = version::is_newer(&record.version, &kept.version);
+                    let switched = InstallRecord {
+                        version: kept.version.clone(),
+                        path,
+                        installed_at: now(),
+                        previous: Some(KeptVersion { version: record.version.clone(), path: now_kept }),
+                        rolled_back_from: left_newer.then(|| record.version.clone()),
+                        ..record
+                    };
+                    m.state.installed.insert(tool.id.clone(), switched.clone());
+                    Ok(switched)
+                }
+                Err(e) => {
+                    log::error!("switching {} to {} failed: {e}", tool.id, kept.version);
+                    Err(e.to_string())
+                }
+            };
+            if let Some(entry) = m.entry(&tool.id) {
+                entry.job = None;
+                match installed {
+                    Ok(record) => entry.installed = Some(record),
+                    Err(e) => entry.error = Some(e),
+                }
+            }
+            this.save(&m);
+            drop(m);
+            this.changed();
+        });
+    }
+
+    /// Turns keeping previous versions on or off. Turning it off deletes the kept versions.
+    pub fn set_keep_previous(&self, keep: bool) {
+        let dropped: Vec<String> = {
+            let mut m = self.lock();
+            m.state.settings.keep_previous = keep;
+            let mut dropped = Vec::new();
+            if !keep {
+                // Leave tools that are busy alone; their job decides what's kept.
+                let busy: Vec<String> =
+                    m.entries.iter().filter(|e| e.job.is_some()).map(|e| e.tool.id.clone()).collect();
+                for (id, record) in m.state.installed.iter_mut() {
+                    if record.previous.is_some() && !busy.contains(id) {
+                        record.previous = None;
+                        dropped.push(id.clone());
+                    }
+                }
+                for entry in m.entries.iter_mut().filter(|e| dropped.contains(&e.tool.id)) {
+                    if let Some(record) = &mut entry.installed {
+                        record.previous = None;
+                    }
+                }
+            }
+            self.save(&m);
+            dropped
+        };
+        self.changed();
+        if dropped.is_empty() {
+            return;
+        }
+        let this = self.clone();
+        thread::spawn(move || {
+            for id in dropped {
+                if let Err(e) = this.inner.installer.remove_kept(&id) {
+                    log::warn!("could not remove the kept version of {id}: {e}");
+                }
+            }
         });
     }
 
@@ -774,5 +907,73 @@ impl Engine {
                 }
             }
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn entry(installed: &str, latest: &str, rolled_back_from: Option<&str>) -> ToolEntry {
+        let tool = Catalog::bundled().tools.into_iter().next().unwrap();
+        let package = Asset { name: "x.zip".into(), url: "https://x".into(), size: 1 };
+        ToolEntry {
+            latest: Some(LatestRelease {
+                version: latest.into(),
+                html_url: String::new(),
+                published_at: None,
+                notes: String::new(),
+                package: Some((package, PackageKind::PortableZip)),
+                checksums: None,
+                signature: None,
+                msi: None,
+            }),
+            installed: Some(InstallRecord {
+                version: installed.into(),
+                path: "/x".into(),
+                installed_at: 0,
+                managed: true,
+                msi: false,
+                previous: None,
+                rolled_back_from: rolled_back_from.map(Into::into),
+            }),
+            ..ToolEntry::new(tool)
+        }
+    }
+
+    #[test]
+    fn the_version_switched_back_from_is_still_shown_as_an_update() {
+        assert!(entry("0.3.0", "0.5.0", None).update_available());
+        assert!(entry("0.3.0", "0.5.0", Some("0.5.0")).update_available());
+        assert!(entry("0.3.0", "0.6.0", Some("0.5.0")).update_available());
+    }
+
+    #[test]
+    fn the_version_switched_back_from_is_neither_installed_nor_announced_automatically() {
+        let dir = tempfile::tempdir().unwrap();
+        let paths = Paths::in_dir(dir.path());
+        let installer = Installer::with_apps_dir(dir.path().join("Applications"), &paths);
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let seen = events.clone();
+        let engine = Engine::new(paths, installer, None, || {}, move |e| seen.lock().unwrap().push(format!("{e:?}")));
+        for policy in [UpdatePolicy::Notify, UpdatePolicy::Auto] {
+            {
+                let mut m = engine.lock();
+                m.state.settings.default_policy = policy;
+                m.entries = vec![entry("0.3.0", "0.5.0", Some("0.5.0"))];
+            }
+            engine.apply_policies();
+            assert!(events.lock().unwrap().is_empty(), "{policy:?}: no notification");
+            assert!(engine.lock().entries[0].job.is_none(), "{policy:?}: nothing installed");
+        }
+
+        // A later release is handled as usual.
+        {
+            let mut m = engine.lock();
+            m.state.settings.default_policy = UpdatePolicy::Notify;
+            m.entries = vec![entry("0.3.0", "0.6.0", Some("0.5.0"))];
+        }
+        engine.apply_policies();
+        assert_eq!(events.lock().unwrap().len(), 1, "{:?}", events.lock().unwrap());
     }
 }

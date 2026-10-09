@@ -46,6 +46,9 @@ pub struct Settings {
     pub login_prompt_answered: bool,
     /// Whether we've told the user that closing the window doesn't quit.
     pub background_hint_shown: bool,
+    /// Keep the version an update replaces, so the user can switch back to it. Off by default
+    /// because it doubles the disk space each app uses.
+    pub keep_previous: bool,
 }
 
 impl Default for Settings {
@@ -58,6 +61,7 @@ impl Default for Settings {
             launch_at_login: false,
             login_prompt_answered: false,
             background_hint_shown: false,
+            keep_previous: false,
         }
     }
 }
@@ -82,6 +86,21 @@ pub struct InstallRecord {
     /// removing it runs that installer, which asks for admin rights.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub msi: bool,
+    /// The copy this one replaced, kept for switching back (see [`Settings::keep_previous`]).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub previous: Option<KeptVersion>,
+    /// Set after switching back to an older version: the newer one the user left. It's still
+    /// shown as an update, but never installed or announced automatically (a later release is).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rolled_back_from: Option<String>,
+}
+
+/// An older copy of a tool, kept after an update.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct KeptVersion {
+    pub version: String,
+    /// The kept bundle (macOS) or folder, inside [`Paths::previous_dir`].
+    pub path: PathBuf,
 }
 
 fn yes() -> bool {
@@ -144,17 +163,24 @@ pub struct Paths {
     pub downloads_dir: PathBuf,
     /// Scratch space for unpacking (e.g. DMG mount points).
     pub work_dir: PathBuf,
+    /// Previous versions kept for switching back: outside the apps folders, so they don't show
+    /// up as apps, and on the same disk, so keeping one is a move rather than a copy.
+    pub previous_dir: PathBuf,
 }
 
 impl Paths {
     pub fn new() -> Option<Self> {
         let config = dirs::config_dir()?.join("GetCraft");
         let cache = dirs::cache_dir()?.join("GetCraft");
+        // Not the roaming %APPDATA% on Windows: apps are far too big to sync. On macOS the
+        // `.noindex` suffix keeps Spotlight from listing the kept apps.
+        let previous = if cfg!(target_os = "macos") { "Previous.noindex" } else { "previous" };
         Some(Self {
             state_file: config.join("state.json"),
             http_cache_file: cache.join("http-cache.json"),
             downloads_dir: cache.join("downloads"),
             work_dir: cache.join("work"),
+            previous_dir: dirs::data_local_dir()?.join("GetCraft").join(previous),
         })
     }
 
@@ -165,6 +191,7 @@ impl Paths {
             http_cache_file: root.join("http-cache.json"),
             downloads_dir: root.join("downloads"),
             work_dir: root.join("work"),
+            previous_dir: root.join("previous"),
         }
     }
 }
@@ -187,6 +214,8 @@ mod tests {
                 installed_at: 1,
                 managed: true,
                 msi: false,
+                previous: Some(KeptVersion { version: "0.4.0".into(), path: "/tmp/previous/PhotoCraft.app".into() }),
+                rolled_back_from: None,
             },
         );
         state.installed.insert(
@@ -197,6 +226,8 @@ mod tests {
                 installed_at: 1,
                 managed: false,
                 msi: true,
+                previous: None,
+                rolled_back_from: Some("0.4.1".into()),
             },
         );
         state.save(&path).unwrap();
@@ -206,6 +237,9 @@ mod tests {
         assert_eq!(loaded.installed["photocraft"].version, "0.5.0");
         assert!(!loaded.installed["photocraft"].msi);
         assert!(loaded.installed["pdfcraft"].msi);
+        assert_eq!(loaded.installed["photocraft"].previous.as_ref().unwrap().version, "0.4.0");
+        assert_eq!(loaded.installed["pdfcraft"].rolled_back_from.as_deref(), Some("0.4.1"));
+        assert!(!loaded.settings.keep_previous);
     }
 
     #[test]

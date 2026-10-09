@@ -31,6 +31,17 @@ pub struct Installer {
     /// so they never see, or touch, the real system.
     #[cfg_attr(target_os = "linux", allow(dead_code))]
     scan_system_dirs: bool,
+    /// Where replaced versions are kept: `<previous_dir>/<id>/<bundle or folder>`.
+    previous_dir: PathBuf,
+}
+
+/// The result of an install.
+#[derive(Debug)]
+pub struct Installed {
+    /// What gets launched.
+    pub path: PathBuf,
+    /// The replaced copy, if it was kept.
+    pub kept: Option<PathBuf>,
 }
 
 /// A copy of a tool that was installed without GetCraft.
@@ -45,20 +56,143 @@ pub struct Existing {
 
 impl Installer {
     pub fn new(paths: &Paths) -> Self {
-        Self { apps_dir: default_apps_dir(), work_dir: paths.work_dir.clone(), scan_system_dirs: true }
+        Self {
+            apps_dir: default_apps_dir(),
+            work_dir: paths.work_dir.clone(),
+            scan_system_dirs: true,
+            previous_dir: paths.previous_dir.clone(),
+        }
     }
 
     /// Installs into `apps_dir` only and ignores tools installed anywhere else.
     pub fn with_apps_dir(apps_dir: PathBuf, paths: &Paths) -> Self {
-        Self { apps_dir, work_dir: paths.work_dir.clone(), scan_system_dirs: false }
+        Self {
+            apps_dir,
+            work_dir: paths.work_dir.clone(),
+            scan_system_dirs: false,
+            previous_dir: paths.previous_dir.clone(),
+        }
     }
 
-    /// Installs `tool` from a downloaded package and returns its launch path. An update
-    /// (`previous` is the current launch path) replaces the existing copy where it is, so
-    /// nothing else on disk is ever moved or removed. `icon` is a PNG for Linux menu entries.
-    /// An [`PackageKind::Msi`] only updates a copy installed with the app's own `.msi`.
-    #[allow(unused_variables)]
+    /// Installs `tool` from a downloaded package. An update (`previous` is the current launch
+    /// path) replaces the existing copy where it is, so nothing else on disk is ever moved or
+    /// removed; with `keep_previous` the replaced copy is moved to the previous-versions folder
+    /// (replacing the one kept before) instead of being deleted. `icon` is a PNG for Linux menu
+    /// entries. An [`PackageKind::Msi`] only updates a copy installed with the app's own `.msi`
+    /// and never keeps the old one (Windows Installer can't go back to it).
     pub fn install(
+        &self,
+        tool: &Tool,
+        package: &Path,
+        kind: PackageKind,
+        previous: Option<&Path>,
+        keep_previous: bool,
+        icon: Option<&[u8]>,
+    ) -> Result<Installed> {
+        let Some(current) = previous.filter(|_| keep_previous && kind != PackageKind::Msi) else {
+            return Ok(Installed { path: self.install_package(tool, package, kind, previous, icon)?, kept: None });
+        };
+        let root = install_root(current);
+        let name = root.file_name().ok_or_else(|| Error::Install("bad install path".into()))?;
+        let dir = self.previous_dir.join(&tool.id);
+        // The version kept so far is only dropped once the update has worked.
+        let replaced = self.previous_dir.join(format!(".{}.replaced", tool.id));
+        remove_path(&replaced)?;
+        if dir.exists() {
+            fs::rename(&dir, &replaced)?;
+        }
+        let kept = dir.join(name);
+        let result = move_path(root, &kept).and_then(|()| self.install_package(tool, package, kind, previous, icon));
+        match result {
+            Ok(path) => {
+                if let Err(e) = remove_path(&replaced) {
+                    log::warn!("could not remove the version kept before: {e}");
+                }
+                Ok(Installed { path, kept: Some(kept) })
+            }
+            Err(e) => {
+                // Put everything back as it was, replacing whatever the failed install left there.
+                if kept.exists()
+                    && let Err(restore) = remove_path(root).map_err(Into::into).and_then(|()| move_path(&kept, root))
+                {
+                    log::error!("could not restore {} after a failed update: {restore}", root.display());
+                }
+                if replaced.exists() {
+                    let _ = remove_path(&dir);
+                    if let Err(restore) = fs::rename(&replaced, &dir) {
+                        log::error!("could not restore the kept version of {}: {restore}", tool.id);
+                    }
+                }
+                Err(e)
+            }
+        }
+    }
+
+    /// Swaps the installed copy at `current` with the kept one at `kept`, so the kept version is
+    /// installed again and the current one is kept in its place. Returns the new launch path and
+    /// the new kept path.
+    pub fn switch_to_kept(&self, tool: &Tool, current: &Path, kept: &Path) -> Result<(PathBuf, PathBuf)> {
+        let dir = self.previous_dir.join(&tool.id);
+        let kept_name = kept.file_name().filter(|_| kept.parent() == Some(dir.as_path()) && kept.exists());
+        let kept_name = kept_name.ok_or_else(|| Error::Install(format!("the kept {} is missing", tool.name)))?;
+        self.check_kept(tool, kept)?;
+
+        let root = install_root(current);
+        let (Some(parent), Some(name)) = (root.parent(), root.file_name()) else {
+            return Err(Error::Install("bad install path".into()));
+        };
+        // The launch path inside the folder (Windows, Linux), or the bundle itself (macOS).
+        let inside = current.strip_prefix(root).unwrap_or(Path::new("")).to_path_buf();
+        let restored = parent.join(kept_name);
+        if restored != root && restored.exists() {
+            return Err(Error::Install(format!("{} is in the way", restored.display())));
+        }
+
+        let parked = dir.join(".switching");
+        remove_path(&parked)?;
+        move_path(root, &parked)?;
+        if let Err(e) = move_path(kept, &restored) {
+            if let Err(undo) = move_path(&parked, root) {
+                log::error!("could not put {} back: {undo}", root.display());
+            }
+            return Err(e);
+        }
+        let now_kept = dir.join(name);
+        fs::rename(&parked, &now_kept)?;
+        let launch = if inside.as_os_str().is_empty() { restored } else { restored.join(inside) };
+        Ok((launch, now_kept))
+    }
+
+    /// Checks a kept copy before it's installed again: it sits in a folder the user can write
+    /// to, so it gets the same checks as a fresh download where the platform allows.
+    #[allow(unused_variables)]
+    fn check_kept(&self, tool: &Tool, kept: &Path) -> Result<()> {
+        #[cfg(target_os = "macos")]
+        {
+            let identity = crate::trust::mac_identity(&tool.id, &tool.repo)
+                .ok_or_else(|| Error::Install(format!("{} isn't from a trusted publisher", tool.name)))?;
+            macos::verify_signature(kept, &identity)
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            let program = if cfg!(windows) { format!("{}.exe", tool.id) } else { format!("{}.AppImage", tool.id) };
+            match kept.join(&program).is_file() {
+                true => Ok(()),
+                false => Err(Error::Install(format!("the kept {} is incomplete", tool.name))),
+            }
+        }
+    }
+
+    /// Deletes the kept version of `tool`, if there is one.
+    pub fn remove_kept(&self, tool_id: &str) -> Result<()> {
+        if !crate::trust::valid_id(tool_id) {
+            return Err(Error::Install(format!("invalid tool id {tool_id:?}")));
+        }
+        remove_path(&self.previous_dir.join(tool_id)).map_err(Into::into)
+    }
+
+    #[allow(unused_variables)]
+    fn install_package(
         &self,
         tool: &Tool,
         package: &Path,
@@ -213,6 +347,54 @@ pub(crate) fn swap_into_place(staged: &Path, dest: &Path) -> Result<()> {
         log::warn!("could not remove previous version at {}: {e}", old.display());
     }
     Ok(())
+}
+
+/// Moves `from` to `to`, copying across disks when a rename can't (e.g. `/Applications` on
+/// another volume than the user's data).
+pub(crate) fn move_path(from: &Path, to: &Path) -> Result<()> {
+    if let Some(parent) = to.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    match fs::rename(from, to) {
+        Ok(()) => Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::CrossesDevices => {
+            if let Err(e) = copy_tree(from, to) {
+                let _ = remove_path(to);
+                return Err(e);
+            }
+            remove_path(from).map_err(Into::into)
+        }
+        Err(e) => Err(e.into()),
+    }
+}
+
+/// Copies a file or folder. On macOS `ditto` keeps code signatures and extended attributes.
+fn copy_tree(from: &Path, to: &Path) -> Result<()> {
+    #[cfg(target_os = "macos")]
+    {
+        let out = std::process::Command::new("ditto").arg(from).arg(to).output()?;
+        if !out.status.success() {
+            return Err(Error::Install(format!("copying failed: {}", String::from_utf8_lossy(&out.stderr).trim())));
+        }
+        Ok(())
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let meta = fs::symlink_metadata(from)?;
+        if meta.is_dir() {
+            fs::create_dir_all(to)?;
+            for entry in fs::read_dir(from)? {
+                let entry = entry?;
+                copy_tree(&entry.path(), &to.join(entry.file_name()))?;
+            }
+        } else if meta.is_symlink() {
+            #[cfg(unix)]
+            std::os::unix::fs::symlink(fs::read_link(from)?, to)?;
+        } else {
+            fs::copy(from, to)?;
+        }
+        Ok(())
+    }
 }
 
 pub(crate) fn remove_path(path: &Path) -> std::io::Result<()> {

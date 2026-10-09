@@ -57,6 +57,9 @@
 - **Finds what you already have.** Apps you installed by hand are recognised and kept up to date
   too. On Windows that includes apps installed with their own `.msi` installer: GetCraft updates
   them with the new official installer when you click *Update*, and Windows asks for permission.
+- **Switch back if an update goes wrong** (optional). GetCraft can keep the previous version of
+  each app when it updates, so you can return to it from the app's ⋯ menu. The version you left
+  is then never installed automatically. Off by default, since it takes extra disk space.
 - **Quietly in the background.** Closing the window leaves GetCraft in the menu bar or system
   tray, where it keeps checking. It can start at login, and it updates itself.
 - **New apps appear automatically.** When the ArtCraft team publishes a new Crafting App,

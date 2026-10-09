@@ -27,6 +27,7 @@ enum Action {
     Launch(String),
     AskUninstall(String),
     Uninstall(String),
+    SwitchToPrevious(String),
     SetPolicy(String, Option<UpdatePolicy>),
     ShowNotes(String),
     DismissError(String),
@@ -195,6 +196,7 @@ impl GetCraftApp {
             Action::Launch(id) => self.engine.launch(&id),
             Action::AskUninstall(id) => self.confirm_uninstall = Some(id),
             Action::Uninstall(id) => self.engine.uninstall(&id),
+            Action::SwitchToPrevious(id) => self.engine.switch_to_previous(&id),
             Action::SetPolicy(id, p) => self.engine.set_policy(&id, p),
             Action::ShowNotes(id) => self.notes_for = Some(id),
             Action::DismissError(id) => self.engine.dismiss_error(&id),
@@ -575,6 +577,21 @@ impl GetCraftApp {
                 );
             });
 
+            section(ui, "Previous versions", |ui| {
+                let mut keep = snap.settings.keep_previous;
+                if ui.checkbox(&mut keep, "Keep the previous version when an app is updated").changed() {
+                    self.engine.set_keep_previous(keep);
+                }
+                ui.label(
+                    RichText::new(
+                        "Lets you switch back from an app's ⋯ menu if something is wrong with a new version. Each \
+                         kept version takes about as much disk space as the app. Turning this off deletes them.",
+                    )
+                    .small()
+                    .color(FAINT),
+                );
+            });
+
             section(ui, "Check for updates", |ui| {
                 let mut hours = snap.settings.check_interval_hours;
                 egui::ComboBox::from_id_salt("interval")
@@ -790,6 +807,10 @@ fn card_actions(ui: &mut Ui, entry: &ToolEntry, snap: &Snapshot, actions: &mut V
                 ui.label(RichText::new("Removing…").color(MUTED));
                 ui.add(egui::Spinner::new());
             }
+            Some(Job::Switching) => {
+                ui.label(RichText::new("Switching…").color(MUTED));
+                ui.add(egui::Spinner::new());
+            }
             None => match (&entry.installed, &entry.latest) {
                 (Some(installed), _) if entry.update_available() => {
                     let mut update = ui.add(theme::primary("Update"));
@@ -859,6 +880,21 @@ fn more_menu(ui: &mut Ui, entry: &ToolEntry, actions: &mut Vec<Action>) {
                 if ui.radio(custom == p, p.label()).clicked() {
                     actions.push(Action::SetPolicy(id.clone(), Some(p)));
                 }
+            }
+            if let Some(kept) = &installed.previous {
+                ui.separator();
+                let back = !getcraft_core::version::is_newer(&kept.version, &installed.version);
+                let label = if back { "Switch back to" } else { "Switch to" };
+                if ui.button(format!("{label} {}", kept.version)).clicked() {
+                    actions.push(Action::SwitchToPrevious(id.clone()));
+                }
+            }
+            if let Some(left) = &installed.rolled_back_from {
+                ui.label(
+                    RichText::new(format!("You switched back from {left}, so it won't be installed automatically."))
+                        .small()
+                        .color(FAINT),
+                );
             }
             if installed.msi {
                 ui.label(
@@ -932,6 +968,7 @@ impl GetCraftApp {
             let entry = snap.tools.iter().find(|t| t.tool.id == id);
             let name = entry.map_or(id.clone(), |t| t.tool.name.clone());
             let msi = entry.and_then(|t| t.installed.as_ref()).is_some_and(|i| i.msi);
+            let kept = entry.and_then(|t| t.installed.as_ref()).and_then(|i| i.previous.as_ref());
             let modal = egui::Modal::new(Id::new("confirm-uninstall")).show(ctx, |ui| {
                 ui.set_width(360.0);
                 ui.label(RichText::new(format!("Uninstall {name}?")).size(17.0).strong());
@@ -941,6 +978,9 @@ impl GetCraftApp {
                 );
                 if msi {
                     ui.label(RichText::new(MSI_PERMISSION).color(MUTED));
+                }
+                if let Some(kept) = kept {
+                    ui.label(RichText::new(format!("The kept version {} is deleted too.", kept.version)).color(MUTED));
                 }
                 ui.add_space(8.0);
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
