@@ -133,7 +133,7 @@ jobs:
           security delete-keychain "$RUNNER_TEMP/build.keychain-db" || true
           rm -f "$RUNNER_TEMP/AuthKey.p8"
 
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: macos
           path: target/getcraft-*.dmg
@@ -183,7 +183,7 @@ jobs:
       - name: Upload the unsigned build for SignPath
         if: env.HAS_SIGNING == 'true'
         id: unsigned
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: windows-unsigned
           path: dist/
@@ -238,7 +238,7 @@ jobs:
             Copy-Item "dist/$arch/*" "pkg/GetCraft/"
             Compress-Archive -Path pkg/GetCraft -DestinationPath "out/getcraft-$env:VERSION-windows-$arch-portable.zip"
           }
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: windows
           path: |
@@ -286,7 +286,7 @@ jobs:
           echo "$RUNTIME_SHA  runtime" | sha256sum -c -
           chmod +x appimagetool
           ARCH=${{ matrix.arch }} ./appimagetool --appimage-extract-and-run --runtime-file runtime AppDir "dist/getcraft-$VERSION-linux-${{ matrix.arch }}.AppImage"
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: linux-${{ matrix.arch }}
           path: dist/*.AppImage
