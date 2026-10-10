@@ -1,7 +1,7 @@
 > [!NOTE]
 > **This project is archived.** The ArtCraft team now has its own official launcher for the
-> Crafting Apps, built from the ideas of the community:
-> **[storytold/craft-launcher](https://github.com/storytold/craft-launcher)**. Please use that one.
+> Crafting Apps, built from the ideas of the community, the
+> **[ArtCraft Launcher](https://github.com/storytold/craft-launcher)**. Please use that one.
 > Thank you to everyone who tried GetCraft, reported problems and shared ideas. It was a pleasure
 > to be part of this.
 

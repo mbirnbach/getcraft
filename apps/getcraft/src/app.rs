@@ -69,6 +69,9 @@ pub struct GetCraftApp {
 /// Enough frames to prove the renderer, fonts, images and layout all work.
 const SMOKE_TEST_FRAMES: u32 = 30;
 
+/// The ArtCraft team's official launcher, which replaces GetCraft.
+const OFFICIAL_LAUNCHER_URL: &str = "https://github.com/storytold/craft-launcher";
+
 impl GetCraftApp {
     pub fn new(
         cc: &eframe::CreationContext<'_>,
@@ -143,9 +146,12 @@ impl GetCraftApp {
         if flags.after_update && !flags.smoke_test {
             let version = env!("CARGO_PKG_VERSION");
             if hidden {
-                notify::message("GetCraft was updated", &format!("You're now on version {version}."));
+                notify::message(
+                    &format!("GetCraft {version} is its final version"),
+                    "The ArtCraft team now has an official launcher. Open GetCraft to find out more.",
+                );
             } else {
-                app.toast(format!("GetCraft was updated to version {version}"), true);
+                app.toast(format!("GetCraft was updated to version {version}, its final version"), true);
             }
         }
         app
@@ -278,6 +284,7 @@ impl eframe::App for GetCraftApp {
             installed_panel(ui, &snap, &mut actions);
         }
         egui::CentralPanel::default().frame(Frame::NONE.inner_margin(Margin::symmetric(28, 20))).show(ui, |ui| {
+            farewell_banner(ui);
             if let Some(update) = snap.launcher_update.as_ref().filter(|u| u.ready)
                 && launcher_banner(ui, update, snap.busy)
             {
@@ -1077,6 +1084,42 @@ fn logo(ui: &mut Ui, size: f32) {
             .fit_to_exact_size(vec2(size, size))
             .corner_radius(size * 0.2),
     );
+}
+
+/// GetCraft is no longer developed: points everyone to the official ArtCraft Launcher.
+fn farewell_banner(ui: &mut Ui) {
+    Frame::NONE
+        .fill(theme::ACCENT_SOFT)
+        .stroke(Stroke::new(1.0, ACCENT))
+        .corner_radius(theme::RADIUS)
+        .inner_margin(Margin::symmetric(16, 12))
+        .show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.horizontal(|ui| {
+                logo(ui, 32.0);
+                ui.add_space(4.0);
+                // Leave room for the button so the text wraps before it.
+                let text_width = (ui.available_width() - 200.0).max(200.0);
+                ui.vertical(|ui| {
+                    ui.set_max_width(text_width);
+                    ui.label(RichText::new("The ArtCraft team now has an official launcher").strong());
+                    ui.label(
+                        RichText::new(
+                            "It's built from the community's ideas and replaces GetCraft, which is no longer \
+                             developed. GetCraft keeps working, but won't get any more updates of its own. \
+                             Thank you for using it!",
+                        )
+                        .color(MUTED),
+                    );
+                });
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    if ui.add(theme::primary("Get ArtCraft Launcher")).clicked() {
+                        let _ = open::that(OFFICIAL_LAUNCHER_URL);
+                    }
+                });
+            });
+        });
+    ui.add_space(12.0);
 }
 
 /// "A new GetCraft is ready" bar. Returns true when the user clicks restart.
