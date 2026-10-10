@@ -1,8 +1,8 @@
 # AGENTS.md
 
-> **Archived (October 2026).** The ArtCraft team released an official launcher,
-> [storytold/craft-launcher](https://github.com/storytold/craft-launcher). GetCraft is no longer
-> developed; the repository is read-only.
+> **Archived (October 2026).** The ArtCraft team released an official launcher, ArtCraft Launcher
+> ([storytold/craft-launcher](https://github.com/storytold/craft-launcher)). GetCraft is no longer
+> developed; the repository is read-only. The final release, 0.1.6, shows a banner pointing to it.
 
 Notes for AI coding agents (and humans) working on GetCraft: what the project is, how it's put
 together, how it's built, tested and released, and the non-obvious things that were learned the
