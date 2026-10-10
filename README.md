@@ -1,3 +1,10 @@
+> [!NOTE]
+> **This project is archived.** The ArtCraft team now has its own official launcher for the
+> Crafting Apps, built from the ideas of the community:
+> **[storytold/craft-launcher](https://github.com/storytold/craft-launcher)**. Please use that one.
+> Thank you to everyone who tried GetCraft, reported problems and shared ideas. It was a pleasure
+> to be part of this.
+
 <p align="center">
   <img alt="GetCraft app icon: an engraved octopus on turquoise" src="assets/getcraft-256.png" width="128">
 </p>
@@ -14,7 +21,7 @@
   <img alt="100% Rust" src="https://img.shields.io/badge/100%25-Rust-b7410e?style=flat-square&logo=rust">
   <img alt="macOS · Windows · Linux" src="https://img.shields.io/badge/macOS%20%C2%B7%20Windows%20%C2%B7%20Linux-native-2f7bf5?style=flat-square">
   <img alt="License: MIT OR Apache-2.0" src="https://img.shields.io/badge/license-MIT%20%2F%20Apache--2.0-3a3a3a?style=flat-square">
-  <img alt="Status: early" src="https://img.shields.io/badge/status-early-d69e2e?style=flat-square">
+  <img alt="Status: archived" src="https://img.shields.io/badge/status-archived-6b6b6b?style=flat-square">
   <a href="https://github.com/mbirnbach/getcraft/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/mbirnbach/getcraft/ci.yml?branch=main&style=flat-square&label=CI"></a>
   <a href="https://github.com/mbirnbach/getcraft/actions/workflows/security.yml"><img alt="Security checks" src="https://img.shields.io/github/actions/workflow/status/mbirnbach/getcraft/security.yml?branch=main&style=flat-square&label=security%20checks"></a>
 </p>
