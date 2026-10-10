@@ -1,0 +1,134 @@
+# The curated list of tools GetCraft knows about.
+#
+# Every entry points at a GitHub repository whose releases follow the Crafting Apps naming scheme
+# (`<id>-<version>-<os>-<arch>.<ext>`). Tools in the `storytold` organisation that are *not* listed
+# here are still discovered automatically (see `discovery` below); listing them just gives them a
+# proper name, description and category.
+#
+# This file is compiled into the launcher as a fallback and also fetched from the main branch at
+# runtime, so adding a tool here reaches existing installs without shipping a new launcher.
+
+[discovery]
+owners = ["storytold"]
+# Repositories ending in "craft" that are not desktop apps (or are handled elsewhere).
+ignore = ["artcraft", "artcraftx", "placeholder-artcraft", "photocraft-corpus", "craft-fonts"]
+
+[[category]]
+id = "image"
+name = "Image & Photo"
+
+[[category]]
+id = "design"
+name = "Graphic Design"
+
+[[category]]
+id = "video"
+name = "Video & Motion"
+
+[[category]]
+id = "office"
+name = "Documents & Office"
+
+[[category]]
+id = "audio"
+name = "Audio"
+
+[[category]]
+id = "cad"
+name = "CAD"
+
+[[tool]]
+id = "photocraft"
+name = "PhotoCraft"
+repo = "storytold/photocraft"
+category = "image"
+kind = "Image editor"
+description = "The open-source image editor you already know how to use."
+
+[[tool]]
+id = "vectorcraft"
+name = "VectorCraft"
+repo = "storytold/vectorcraft"
+category = "design"
+kind = "Vector illustration"
+description = "Fast, open-source vector illustration, reimagined in pure Rust."
+
+[[tool]]
+id = "filmcraft"
+name = "FilmCraft"
+repo = "storytold/filmcraft"
+category = "video"
+kind = "Video editor"
+description = "Professional, open-source video editing, rebuilt from scratch in Rust."
+
+[[tool]]
+id = "lightcraft"
+name = "LightCraft"
+repo = "storytold/lightcraft"
+category = "image"
+kind = "Photo library & raw developer"
+description = "An open-source photo library and raw developer that runs on your machine."
+
+[[tool]]
+id = "pdfcraft"
+name = "PdfCraft"
+repo = "storytold/pdfcraft"
+category = "office"
+kind = "PDF workbench"
+description = "Read, organize, combine, split and secure your PDFs."
+
+[[tool]]
+id = "effectcraft"
+name = "EffectCraft"
+repo = "storytold/effectcraft"
+category = "video"
+kind = "Motion graphics & VFX"
+description = "Open-source motion graphics and visual effects, built in pure Rust."
+
+[[tool]]
+id = "designcraft"
+name = "DesignCraft"
+repo = "storytold/designcraft"
+category = "design"
+kind = "Page layout & publishing"
+description = "Open-source page layout and publishing for print and screen."
+
+[[tool]]
+id = "wordcraft"
+name = "WordCraft"
+repo = "storytold/wordcraft"
+category = "office"
+kind = "Word processor"
+description = "Write, format and review documents with a familiar word processor."
+
+[[tool]]
+id = "gridcraft"
+name = "GridCraft"
+repo = "storytold/gridcraft"
+category = "office"
+kind = "Spreadsheets"
+description = "Formulas, tables and charts in an open-source spreadsheet app."
+
+[[tool]]
+id = "deckcraft"
+name = "DeckCraft"
+repo = "storytold/deckcraft"
+category = "office"
+kind = "Presentations"
+description = "Build slide decks and present them, fully open source."
+
+[[tool]]
+id = "soundcraft"
+name = "SoundCraft"
+repo = "storytold/soundcraft"
+category = "audio"
+kind = "Audio workstation"
+description = "Record, edit and mix audio in an open-source digital audio workstation."
+
+[[tool]]
+id = "cadcraft"
+name = "CADCraft"
+repo = "storytold/cadcraft"
+category = "cad"
+kind = "CAD & drafting"
+description = "Computer-aided design and drafting, built from scratch in Rust."
